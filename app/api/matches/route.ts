@@ -58,6 +58,13 @@ export async function GET(request: Request) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      return secureJsonResponse({
+        matches: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      }, 200, Object.fromEntries(headers));
+    }
+
     let query = supabase
       .from("matches")
       .select("*", { count: "exact" })
@@ -127,6 +134,10 @@ export async function POST(request: Request) {
     const matchData = validationResult.data;
 
     const supabase = await createClient();
+
+    if (!supabase) {
+      return secureErrorResponse("Database not configured", 503);
+    }
 
     // Create the match
     const { data, error } = await supabase

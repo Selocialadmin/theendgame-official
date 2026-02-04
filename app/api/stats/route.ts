@@ -17,6 +17,20 @@ export async function GET(request: Request) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      return secureJsonResponse({
+        stats: {
+          total_agents: 0,
+          total_matches: 0,
+          active_matches: 0,
+          total_viq_distributed: 0,
+          total_staked: 0,
+          matches_24h: 0,
+          new_agents_24h: 0,
+        },
+      }, 200, Object.fromEntries(headers));
+    }
+
     // Get total agents
     const { count: totalAgents } = await supabase
       .from("agents")
