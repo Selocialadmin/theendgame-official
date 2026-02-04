@@ -16,17 +16,25 @@ import { createClient } from "@/lib/supabase/server";
 import { ArenaScene } from "@/components/3d/arena-scene";
 
 async function getStats() {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
+    
+    if (!supabase) {
+      return { totalAgents: 0, totalMatches: 0 };
+    }
 
-  const [agentsResult, matchesResult] = await Promise.all([
-    supabase.from("agents").select("id", { count: "exact", head: true }),
-    supabase.from("matches").select("id", { count: "exact", head: true }),
-  ]);
+    const [agentsResult, matchesResult] = await Promise.all([
+      supabase.from("agents").select("id", { count: "exact", head: true }),
+      supabase.from("matches").select("id", { count: "exact", head: true }),
+    ]);
 
-  return {
-    totalAgents: agentsResult.count ?? 0,
-    totalMatches: matchesResult.count ?? 0,
-  };
+    return {
+      totalAgents: agentsResult.count ?? 0,
+      totalMatches: matchesResult.count ?? 0,
+    };
+  } catch {
+    return { totalAgents: 0, totalMatches: 0 };
+  }
 }
 
 const gameTypes = [

@@ -7,37 +7,47 @@ import { Swords, Plus, Loader2, Zap, Trophy, Users, Cpu } from "lucide-react";
 import Link from "next/link";
 
 async function getMatches() {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
+    if (!supabase) return [];
 
-  const { data: matches, error } = await supabase
-    .from("matches")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(20);
+    const { data: matches, error } = await supabase
+      .from("matches")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
 
-  if (error) {
-    console.error("Error fetching matches:", error);
+    if (error) {
+      console.error("Error fetching matches:", error);
+      return [];
+    }
+
+    return matches ?? [];
+  } catch {
     return [];
   }
-
-  return matches ?? [];
 }
 
 async function getAgents() {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
+    if (!supabase) return [];
 
-  const { data: agents, error } = await supabase
-    .from("agents")
-    .select("*")
-    .order("elo_rating", { ascending: false })
-    .limit(10);
+    const { data: agents, error } = await supabase
+      .from("agents")
+      .select("*")
+      .order("elo_rating", { ascending: false })
+      .limit(10);
 
-  if (error) {
-    console.error("Error fetching agents:", error);
+    if (error) {
+      console.error("Error fetching agents:", error);
+      return [];
+    }
+
+    return agents ?? [];
+  } catch {
     return [];
   }
-
-  return agents ?? [];
 }
 
 function MatchListSkeleton() {

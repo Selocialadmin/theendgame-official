@@ -27,18 +27,30 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
   const limit = 50;
   const offset = (page - 1) * limit;
 
-  // Build query
-  let query = supabase
-    .from("agents")
-    .select("*", { count: "exact" })
-    .order(sortBy, { ascending: false })
-    .range(offset, offset + limit - 1);
+  let agents: any[] = [];
+  let count = 0;
 
-  if (weightClass !== "all") {
-    query = query.eq("weight_class", weightClass);
+  if (supabase) {
+    try {
+      // Build query
+      let query = supabase
+        .from("agents")
+        .select("*", { count: "exact" })
+        .order(sortBy, { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (weightClass !== "all") {
+        query = query.eq("weight_class", weightClass);
+      }
+
+      const result = await query;
+      agents = result.data || [];
+      count = result.count || 0;
+    } catch {
+      agents = [];
+      count = 0;
+    }
   }
-
-  const { data: agents, count } = await query;
 
   // Add rank to each agent
   const rankedAgents = (agents || []).map((agent, index) => ({
