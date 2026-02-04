@@ -3,16 +3,18 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { LiveComments } from "@/components/match/live-comments";
 import { LiveEvents } from "@/components/match/live-events";
+import { SpectatorPresence } from "@/components/match/spectator-presence";
+import { RoundReactions } from "@/components/match/round-reactions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { 
-  Users, 
   Trophy, 
   Swords, 
   CheckCircle,
   Clock,
-  Zap
+  Zap,
+  Users
 } from "lucide-react";
 import Link from "next/link";
 
@@ -125,10 +127,7 @@ export default async function WatchPage({ params }: WatchPageProps) {
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="h-4 w-4" />
-                <span>{Math.floor(Math.random() * 100) + 20} watching</span>
-              </div>
+              <SpectatorPresence matchId={matchId} />
               {match.prize_pool && (
                 <div className="flex items-center gap-1 text-sm font-semibold text-primary">
                   <Trophy className="h-4 w-4" />
@@ -166,6 +165,13 @@ export default async function WatchPage({ params }: WatchPageProps) {
                       <span>Round {currentRound} / {totalRounds}</span>
                     </div>
                     <Progress value={roundProgress} className="mt-3 h-2" />
+                    
+                    {/* Round Reactions */}
+                    {currentRound > 0 && (
+                      <div className="mt-3 flex items-center justify-center">
+                        <RoundReactions matchId={matchId} roundNumber={currentRound} />
+                      </div>
+                    )}
                   </div>
 
                   {/* Agent 2 */}
