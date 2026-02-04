@@ -1,8 +1,8 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial, Sphere, Torus, Box, Environment } from "@react-three/drei";
-import { useRef, useMemo } from "react";
+import { Float, MeshDistortMaterial, Environment } from "@react-three/drei";
+import { useRef, useMemo, useState, useEffect, Suspense } from "react";
 import type * as THREE from "three";
 
 function NeuralNetwork() {
@@ -162,30 +162,83 @@ function GridFloor() {
   );
 }
 
+// Fallback for when WebGL fails
+function StaticFallback() {
+  return (
+    <div className="absolute inset-0 -z-10 overflow-hidden">
+      {/* Gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background" />
+      
+      {/* Animated gradient orbs */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px]">
+        <div className="absolute inset-0 rounded-full bg-primary/20 blur-[100px] animate-pulse" />
+        <div className="absolute inset-8 rounded-full bg-primary/10 blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
+      </div>
+      
+      {/* Grid pattern */}
+      <div className="absolute inset-0 grid-pattern opacity-30" />
+    </div>
+  );
+}
+
+function Scene3D() {
+  return (
+    <>
+      <ambientLight intensity={0.2} />
+      <pointLight position={[10, 10, 10]} intensity={0.5} color="#00dcff" />
+      <pointLight position={[-10, -10, -10]} intensity={0.3} color="#ff00b4" />
+      
+      <CentralOrb />
+      <NeuralNetwork />
+      <FloatingCubes />
+      <DataStreams />
+      <GridFloor />
+      
+      {/* Orbital rings */}
+      <GlowingRing radius={2} color="#00dcff" speed={0.3} />
+      <GlowingRing radius={2.5} color="#ff00b4" speed={-0.2} />
+      <GlowingRing radius={3} color="#00dcff" speed={0.15} />
+      
+      <Environment preset="night" />
+    </>
+  );
+}
+
 export function ArenaScene() {
+  const [hasError, setHasError] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Don't render 3D on server
+  if (!isClient) {
+    return <StaticFallback />;
+  }
+
+  // Show fallback if WebGL failed
+  if (hasError) {
+    return <StaticFallback />;
+  }
+
   return (
     <div className="absolute inset-0 -z-10">
       <Canvas
         camera={{ position: [0, 0, 8], fov: 60 }}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, failIfMajorPerformanceCaveat: false }}
         style={{ background: 'transparent' }}
+        onCreated={() => {
+          console.log("[v0] Canvas created successfully");
+        }}
+        onError={() => {
+          console.log("[v0] Canvas error - falling back to static");
+          setHasError(true);
+        }}
       >
-        <ambientLight intensity={0.2} />
-        <pointLight position={[10, 10, 10]} intensity={0.5} color="#00dcff" />
-        <pointLight position={[-10, -10, -10]} intensity={0.3} color="#ff00b4" />
-        
-        <CentralOrb />
-        <NeuralNetwork />
-        <FloatingCubes />
-        <DataStreams />
-        <GridFloor />
-        
-        {/* Orbital rings */}
-        <GlowingRing radius={2} color="#00dcff" speed={0.3} />
-        <GlowingRing radius={2.5} color="#ff00b4" speed={-0.2} />
-        <GlowingRing radius={3} color="#00dcff" speed={0.15} />
-        
-        <Environment preset="night" />
+        <Suspense fallback={null}>
+          <Scene3D />
+        </Suspense>
       </Canvas>
     </div>
   );

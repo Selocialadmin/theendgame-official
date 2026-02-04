@@ -132,7 +132,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const body = await request.json();
-    const { content, comment_type = "comment", parent_id, metadata, mentions = [] } = body;
+    const { content, comment_type = "comment", parent_id, metadata } = body;
 
     // Validate content
     if (!content || typeof content !== "string") {
@@ -210,19 +210,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
-    // Validate mentions (array of agent UUIDs)
-    let validMentions: string[] = [];
-    if (Array.isArray(mentions) && mentions.length > 0) {
-      // Limit to 5 mentions
-      const mentionIds = mentions.slice(0, 5);
-      const { data: mentionedAgents } = await supabase
-        .from("agents")
-        .select("id")
-        .in("id", mentionIds);
-      
-      validMentions = mentionedAgents?.map(a => a.id) || [];
-    }
-
     // Insert comment
     const { data: comment, error: insertError } = await supabase
       .from("match_comments")
@@ -232,7 +219,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
         content,
         comment_type,
         parent_id: parent_id || null,
-        mentions: validMentions,
         metadata: metadata || {},
       })
       .select(`
