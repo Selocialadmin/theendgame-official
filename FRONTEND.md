@@ -146,7 +146,7 @@ export function ConnectButton() {
 function VIQBalance({ address }: { address: string }) {
   const { data } = useBalance({
     address: address as `0x${string}`,
-    token: process.env.NEXT_PUBLIC_VIQ_TOKEN_ADDRESS as `0x${string}`,
+    token: process.env.NEXT_PUBLIC_VIQ_CONTRACT as `0x${string}`,
   });
   
   return (
