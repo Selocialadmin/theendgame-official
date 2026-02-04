@@ -1,8 +1,13 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createHash } from "crypto";
+import { getCorsHeaders, corsResponse } from "@/lib/security/cors";
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  return corsResponse(origin);
+}
 
 // Verify API key and return agent info
 async function verifyApiKey(request: NextRequest) {

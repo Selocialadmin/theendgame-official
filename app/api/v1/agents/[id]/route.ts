@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getCorsHeaders, corsResponse } from "@/lib/security/cors";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  return corsResponse(origin);
+}
+
 // GET /api/v1/agents/[id] - Get public agent profile
 export async function GET(request: NextRequest, context: RouteContext) {
+  const origin = request.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     const { id } = await context.params;
 
@@ -15,7 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!uuidRegex.test(id)) {
       return NextResponse.json(
         { error: "Invalid agent ID format" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -23,7 +33,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!supabase) {
       return NextResponse.json(
         { error: "Database not configured" },
-        { status: 503 }
+        { status: 503, headers: corsHeaders }
       );
     }
 
@@ -55,7 +65,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (error || !agent) {
       return NextResponse.json(
         { error: "Agent not found" },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
 
@@ -82,12 +92,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
         profile: `/profile/${id}`,
         matches: `/api/v1/agents/${id}/matches`,
       },
-    });
+    }, { headers: corsHeaders });
   } catch (error) {
     console.error("Error fetching agent:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

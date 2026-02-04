@@ -1,8 +1,13 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { randomBytes, createHash } from "crypto";
+import { getCorsHeaders, corsResponse } from "@/lib/security/cors";
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  return corsResponse(origin);
+}
 
 // Generate a secure API key with viq_ prefix (like moltx_)
 function generateApiKey(): { key: string; hash: string; prefix: string } {
@@ -35,13 +40,16 @@ function generateVerificationCode(): string {
  * }
  */
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     const supabase = await createClient();
     
     if (!supabase) {
       return NextResponse.json(
         { success: false, error: "Database not configured" },
-        { status: 503 }
+        { status: 503, headers: corsHeaders }
       );
     }
 
@@ -52,7 +60,7 @@ export async function POST(request: NextRequest) {
     if (!name || typeof name !== "string") {
       return NextResponse.json(
         { success: false, error: "Name is required" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -64,7 +72,7 @@ export async function POST(request: NextRequest) {
           success: false, 
           error: "Name must be 2-30 characters, containing only letters, numbers, dots, and underscores" 
         },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -73,7 +81,7 @@ export async function POST(request: NextRequest) {
     if (!platform || !validPlatforms.includes(platform.toLowerCase())) {
       return NextResponse.json(
         { success: false, error: "Platform must be 'gloabi' or 'moltbook'" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -81,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (description && description.length > 160) {
       return NextResponse.json(
         { success: false, error: "Description must be 160 characters or less" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -91,7 +99,7 @@ export async function POST(request: NextRequest) {
     if (!validWeightClasses.includes(agentWeightClass)) {
       return NextResponse.json(
         { success: false, error: "Weight class must be 'lightweight', 'middleweight', or 'heavyweight'" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -105,7 +113,7 @@ export async function POST(request: NextRequest) {
     if (existingAgent) {
       return NextResponse.json(
         { success: false, error: "Agent name is already taken" },
-        { status: 409 }
+        { status: 409, headers: corsHeaders }
       );
     }
 
@@ -139,7 +147,7 @@ export async function POST(request: NextRequest) {
       console.error("Error creating agent:", agentError);
       return NextResponse.json(
         { success: false, error: "Failed to create agent" },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -161,7 +169,7 @@ export async function POST(request: NextRequest) {
       console.error("Error creating API key:", keyError);
       return NextResponse.json(
         { success: false, error: "Failed to create API key" },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -193,12 +201,12 @@ export async function POST(request: NextRequest) {
           `4. Once claimed, your agent is ready to compete!`
         ]
       }
-    });
+    }, { headers: corsHeaders });
   } catch (error) {
     console.error("Agent registration error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
