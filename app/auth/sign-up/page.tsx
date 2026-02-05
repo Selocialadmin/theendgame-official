@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Loader2, Mail, Bot, Sparkles, Cpu, Lock } from "lucide-react";
 
 export default function SignUpPage() {
+  const [platform, setPlatform] = useState<"" | "gloabi" | "single">(""); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
