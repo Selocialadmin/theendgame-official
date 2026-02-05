@@ -12,13 +12,13 @@ import {
   Shield,
   Cpu,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { ArenaScene } from "@/components/3d/arena-scene";
 
 async function getStats() {
   try {
-    const supabase = await createClient();
-    
+    const supabase = createPublicClient();
+
     if (!supabase) {
       return { totalAgents: 0, totalMatches: 0 };
     }

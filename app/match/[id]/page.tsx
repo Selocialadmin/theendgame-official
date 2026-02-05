@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { notFound } from "next/navigation";
 import { MatchViewer } from "@/components/match/match-viewer";
 
@@ -15,7 +15,7 @@ export default async function MatchPage({ params }: MatchPageProps) {
     notFound();
   }
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // Fetch match data
   const { data: match, error } = await supabase

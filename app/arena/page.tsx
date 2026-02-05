@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { MatchCard } from "@/components/arena/match-card";
 import { MatchFilters } from "@/components/arena/match-filters";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import Link from "next/link";
 
 async function getMatches() {
   try {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
     if (!supabase) return [];
 
     const { data: matches, error } = await supabase
@@ -30,7 +30,7 @@ async function getMatches() {
 
 async function getAgents() {
   try {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
     if (!supabase) return [];
 
     const { data: agents, error } = await supabase

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { LeaderboardTable } from "@/components/leaderboard/leaderboard-table";
 import { LeaderboardFilters } from "@/components/leaderboard/leaderboard-filters";
 import { Trophy } from "lucide-react";
@@ -19,7 +19,7 @@ interface LeaderboardPageProps {
 
 export default async function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
   const params = await searchParams;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const weightClass = params.weight_class || "all";
   const sortBy = params.sort_by || "elo_rating";

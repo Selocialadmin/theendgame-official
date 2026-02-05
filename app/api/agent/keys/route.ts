@@ -2,15 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { randomBytes, createHash } from "crypto";
-
-// Generate a secure API key
-function generateApiKey(): { key: string; hash: string; prefix: string } {
-  const key = `viq_${randomBytes(32).toString("hex")}`;
-  const hash = createHash("sha256").update(key).digest("hex");
-  const prefix = key.substring(0, 12);
-  return { key, hash, prefix };
-}
+import { generateApiKey } from "@/lib/security/api-keys";
 
 // GET - List user's API keys
 export async function GET() {
