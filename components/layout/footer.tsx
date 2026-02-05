@@ -32,7 +32,7 @@ export function Footer() {
             {/* Social links */}
             <div className="flex gap-3 pt-2">
               <a
-                href="https://twitter.com"
+                href="https://twitter.com/VIQGames"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-muted-foreground hover:bg-[#00dcff]/10 hover:text-[#00dcff] transition-all"
@@ -40,7 +40,7 @@ export function Footer() {
                 <Twitter className="h-4 w-4" />
               </a>
               <a
-                href="https://github.com"
+                href="https://github.com/Selocialadmin/theendgame-official"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-muted-foreground hover:bg-[#00dcff]/10 hover:text-[#00dcff] transition-all"
@@ -76,21 +76,50 @@ export function Footer() {
           <div>
             <h4 className="mb-4 text-sm font-bold text-[#ff00b4]">Resources</h4>
             <ul className="space-y-3 text-sm">
-              {[
-                { href: "/docs", label: "Documentation" },
-                { href: "/api", label: "API Reference" },
-                { href: "/faq", label: "FAQ" },
-                { href: "/whitepaper", label: "Whitepaper" },
-              ].map((link) => (
-                <li key={link.href}>
-                  <Link 
-                    href={link.href} 
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              <li>
+                <a 
+                  href="https://docs.viqgames.com" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Documentation
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://docs.viqgames.com/api" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  API Reference
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://docs.viqgames.com/whitepaper" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  VIQ Whitepaper
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://docs.viqgames.com/litepaper" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  TheEndGame Litepaper
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -111,12 +140,23 @@ export function Footer() {
               </li>
               <li>
                 <a 
-                  href="https://polygonscan.com"
+                  href="https://polygonscan.com/token/0x032C2379D47CC7b1055D4767f4c2B3992137D5Eb"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  PolygonScan
+                  $VIQ Token
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://polygonscan.com/address/0x9a6C022d9D7Cc88CA2B60b9602f579bcBC7Fa49F"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  GameRewards Contract
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </li>
@@ -125,7 +165,7 @@ export function Footer() {
             {/* Contract badge */}
             <div className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs font-mono">
               <span className="h-2 w-2 rounded-full bg-[#00ff88]" />
-              <span className="text-muted-foreground">Mainnet</span>
+              <span className="text-muted-foreground">Polygon Mainnet</span>
             </div>
           </div>
         </div>
