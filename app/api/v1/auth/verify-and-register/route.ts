@@ -72,7 +72,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the code from Redis
-    const isValid = await verifyCode(email, code);
+    let isValid = await verifyCode(email, code);
+
+    // Fallback: check in-memory store if Redis verification failed
+    if (!isValid) {
+      const globalCodes = (globalThis as Record<string, unknown>).__verificationCodes as Map<string, { code: string; expires: number }> | undefined;
+      if (globalCodes) {
+        const entry = globalCodes.get(email.toLowerCase());
+        if (entry && entry.code === code && entry.expires > Date.now()) {
+          isValid = true;
+          globalCodes.delete(email.toLowerCase()); // one-time use
+        }
+      }
+    }
+
     if (!isValid) {
       return NextResponse.json(
         { success: false, error: "Invalid or expired verification code. Please request a new one." },

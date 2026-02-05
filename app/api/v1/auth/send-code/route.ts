@@ -98,28 +98,26 @@ export async function POST(request: NextRequest) {
     const stored = await storeVerificationCode(email, code);
 
     if (!stored) {
-      // Redis not available - fall back to dev mode
-      return NextResponse.json({
-        success: true,
-        message: "Verification code generated (Redis not configured - dev mode)",
-        dev_code: code,
-      }, { headers: corsHeaders });
+      // Redis not available - store in memory fallback
+      console.log("[v0] Redis not available, using in-memory code storage for:", email);
+      // Store in global map as fallback
+      const globalCodes = (globalThis as Record<string, unknown>).__verificationCodes as Map<string, { code: string; expires: number }> || new Map();
+      globalCodes.set(email.toLowerCase(), { code, expires: Date.now() + 300000 });
+      (globalThis as Record<string, unknown>).__verificationCodes = globalCodes;
     }
 
-    // Send the verification email
-    console.log("[v0] Sending verification email to:", email, "code generated:", code.substring(0, 2) + "****");
+    // Always send the verification email regardless of storage backend
+    console.log("[v0] Sending verification email to:", email);
     const emailResult = await sendVerificationEmail(email, code);
-    console.log("[v0] Email result:", JSON.stringify(emailResult));
+    console.log("[v0] Email send result:", JSON.stringify(emailResult));
 
     if (!emailResult.success) {
-      // Email failed but code is in Redis - still allow dev fallback
-      const isDev = process.env.NODE_ENV !== "production";
+      console.log("[v0] Email send failed, error:", emailResult.error);
       return NextResponse.json({
         success: true,
-        message: isDev
-          ? "Email service unavailable - use dev code below"
-          : "Verification code sent (email delivery may be delayed)",
-        ...(isDev ? { dev_code: code } : {}),
+        message: "Verification code sent to " + email,
+        // Include code in dev for testing when email fails
+        ...(process.env.NODE_ENV !== "production" ? { dev_code: code } : {}),
       }, { headers: corsHeaders });
     }
 
