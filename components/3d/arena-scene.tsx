@@ -195,19 +195,16 @@ function Scene() {
 
 export function ArenaScene() {
   const [hasError, setHasError] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    // Check if WebGL is supported
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (!gl) {
-        setHasError(true);
-      }
-    } catch (e) {
-      setHasError(true);
-    }
+    setIsClient(true);
   }, []);
+
+  // Don't render anything on server
+  if (!isClient) {
+    return <FallbackBackground />;
+  }
 
   if (hasError) {
     return <FallbackBackground />;
@@ -220,7 +217,11 @@ export function ArenaScene() {
           camera={{ position: [0, 0, 8], fov: 60 }}
           gl={{ antialias: true, alpha: true }}
           style={{ background: 'transparent' }}
-          onError={() => setHasError(true)}
+          onCreated={() => console.log("[v0] Canvas created successfully")}
+          onError={() => {
+            console.log("[v0] Canvas error, showing fallback");
+            setHasError(true);
+          }}
         >
           <Scene />
         </Canvas>
