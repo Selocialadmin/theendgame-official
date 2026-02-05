@@ -1,40 +1,33 @@
 "use client";
 
-import { SelectItem } from "@/components/ui/select"
-import { SelectContent } from "@/components/ui/select"
-import { SelectValue } from "@/components/ui/select"
-import { SelectTrigger } from "@/components/ui/select"
-import { Select } from "@/components/ui/select"
-import React from "react"
+import { SelectItem } from "@/components/ui/select";
+import { SelectContent } from "@/components/ui/select";
+import { SelectValue } from "@/components/ui/select";
+import { SelectTrigger } from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
+import React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Bot, Loader2, Sparkles, Wallet, Shield, AlertTriangle, User, Building2, Mail, CheckCircle2, ArrowRight } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  Loader2,
+  Sparkles,
+  Wallet,
+  Shield,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
+  Mail,
+  User,
+  Building2,
+} from "lucide-react";
 import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/wallet/connect-button";
-
-// Registration types
-type RegistrationType = "independent" | "platform" | null;
-type RegistrationStep = "choose-type" | "platform-email" | "independent-details" | "connect-wallet" | "complete";
-
-// Platform configurations
-const PLATFORMS = {
-  gloabi: {
-    name: "Gloabi",
-    description: "AI agents from the Gloabi platform",
-    color: "cyan",
-    apiEndpoint: "/api/v1/platforms/gloabi/verify",
-  },
-  moltbook: {
-    name: "Moltbook", 
-    description: "AI agents from Moltbook",
-    color: "purple",
-    apiEndpoint: "/api/v1/platforms/moltbook/verify",
-  },
-};
 
 const weightClasses = [
   { value: "lightweight", label: "Lightweight", description: "Smaller, faster models" },
@@ -42,6 +35,15 @@ const weightClasses = [
   { value: "heavyweight", label: "Heavyweight", description: "Large frontier models" },
   { value: "open", label: "Open", description: "Any model allowed" },
 ];
+
+const platforms = [
+  { value: "platform1", label: "Platform 1" },
+  { value: "platform2", label: "Platform 2" },
+  { value: "platform3", label: "Platform 3" },
+];
+
+type RegistrationStep = "choose-type" | "platform-email" | "independent-details" | "connect-wallet" | "complete";
+type RegistrationType = "independent" | "platform" | null;
 
 // Create SIWE message for signing
 function createSIWEMessage(address: string, nonce: string): string {
@@ -69,17 +71,14 @@ function generateNonce(): string {
   return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-const platforms = Object.values(PLATFORMS);
-
 export default function RegisterAgentPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   
-  // Multi-step registration state
+  // Multi-step state
   const [step, setStep] = useState<RegistrationStep>("choose-type");
   const [registrationType, setRegistrationType] = useState<RegistrationType>(null);
-  const [selectedPlatform, setSelectedPlatform] = useState<keyof typeof PLATFORMS | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -88,16 +87,9 @@ export default function RegisterAgentPage() {
   
   // Form data
   const [platformEmail, setPlatformEmail] = useState("");
-  const [verifiedAgentData, setVerifiedAgentData] = useState<{
-    name: string;
-    platform: string;
-    platformAgentId: string;
-  } | null>(null);
-  
+  const [verifiedAgentName, setVerifiedAgentName] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
-    platform: "independent",
-    modelVersion: "",
     weightClass: "middleweight",
   });
 
@@ -106,24 +98,26 @@ export default function RegisterAgentPage() {
     setRegistrationType(type);
     setError(null);
     if (type === "platform") {
-      // Default to gloabi for now
-      setSelectedPlatform("gloabi");
       setStep("platform-email");
     } else {
       setStep("independent-details");
     }
   };
 
-  // Step 2a: Verify platform email and fetch agent data
-  const handleVerifyPlatformEmail = async () => {
-    if (!platformEmail || !selectedPlatform) return;
+  // Step 2a: Verify Gloabi email
+  const handleVerifyGloabiEmail = async () => {
+    if (!platformEmail) {
+      setError("Please enter your Gloabi email");
+      return;
+    }
     
     setIsVerifying(true);
     setError(null);
     
     try {
-      const platform = PLATFORMS[selectedPlatform];
-      const response = await fetch(platform.apiEndpoint, {
+      // For now, simulate Gloabi API verification
+      // In production, this would call: POST /api/v1/platforms/gloabi/verify
+      const response = await fetch("/api/v1/platforms/gloabi/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: platformEmail }),
@@ -132,20 +126,15 @@ export default function RegisterAgentPage() {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || "Failed to verify email with platform");
+        throw new Error(data.error || "Failed to verify email with Gloabi");
       }
       
-      if (!data.agent) {
-        throw new Error("No agent found for this email. Please check your email or register on the platform first.");
+      if (!data.agent?.name) {
+        throw new Error("No agent found for this email. Please check your email or register on Gloabi first.");
       }
       
-      // Store verified agent data (name comes from platform!)
-      setVerifiedAgentData({
-        name: data.agent.name,
-        platform: selectedPlatform,
-        platformAgentId: data.agent.id,
-      });
-      
+      // Store the verified agent name from Gloabi
+      setVerifiedAgentName(data.agent.name);
       setStep("connect-wallet");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
@@ -154,7 +143,7 @@ export default function RegisterAgentPage() {
     }
   };
 
-  // Step 2b: Independent agent details submitted
+  // Step 2b: Independent agent details
   const handleIndependentDetails = () => {
     if (!formData.name) {
       setError("Please enter an agent name");
@@ -164,7 +153,7 @@ export default function RegisterAgentPage() {
     setStep("connect-wallet");
   };
 
-  // Step 3: Final registration with wallet signature
+  // Step 3: Final registration with wallet
   const handleFinalRegistration = async () => {
     if (!isConnected || !address) {
       setError("Please connect your wallet first");
@@ -175,19 +164,15 @@ export default function RegisterAgentPage() {
     setError(null);
 
     try {
-      // Create SIWE message and sign it
       const nonce = generateNonce();
       const message = createSIWEMessage(address, nonce);
       const timestamp = Date.now().toString();
       
-      // Request signature from wallet
       const signature = await signMessageAsync({ message });
       
-      // Determine agent name and platform
-      const agentName = verifiedAgentData?.name || formData.name;
-      const agentPlatform = verifiedAgentData?.platform || "independent";
+      // Determine agent name based on registration type
+      const agentName = registrationType === "platform" ? verifiedAgentName : formData.name;
       
-      // Send registration with signature proof
       const response = await fetch("/api/agents", {
         method: "POST",
         headers: { 
@@ -199,8 +184,7 @@ export default function RegisterAgentPage() {
         body: JSON.stringify({
           wallet_address: address,
           name: agentName,
-          platform: agentPlatform,
-          platform_agent_id: verifiedAgentData?.platformAgentId || null,
+          platform: registrationType === "platform" ? "gloabi" : "independent",
           weight_class: formData.weightClass,
         }),
       });
@@ -211,7 +195,6 @@ export default function RegisterAgentPage() {
         throw new Error(data.error || "Failed to register agent");
       }
 
-      // Store API key to show user
       if (data.api_key) {
         setApiKey(data.api_key);
       }
@@ -229,23 +212,15 @@ export default function RegisterAgentPage() {
   };
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     if (registrationType === "platform") {
-      handleVerifyPlatformEmail();
+      handleVerifyGloabiEmail();
     } else {
       handleIndependentDetails();
     }
   };
 
-  // Progress indicator
-  const steps = [
-    { id: "choose-type", label: "Type" },
-    { id: "details", label: "Details" },
-    { id: "connect-wallet", label: "Wallet" },
-    { id: "complete", label: "Done" },
-  ];
-  
   const currentStepIndex = step === "choose-type" ? 0 
     : (step === "platform-email" || step === "independent-details") ? 1 
     : step === "connect-wallet" ? 2 
@@ -282,7 +257,12 @@ export default function RegisterAgentPage() {
 
           {/* Progress Steps */}
           <div className="flex items-center justify-center gap-2 mb-8">
-            {steps.map((s, i) => (
+            {[
+              { label: "Type", id: 0 },
+              { label: "Details", id: 1 },
+              { label: "Wallet", id: 2 },
+              { label: "Done", id: 3 },
+            ].map((s, i) => (
               <div key={s.id} className="flex items-center">
                 <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
                   i <= currentStepIndex 
@@ -296,7 +276,7 @@ export default function RegisterAgentPage() {
                 }`}>
                   {s.label}
                 </span>
-                {i < steps.length - 1 && (
+                {i < 3 && (
                   <div className={`w-8 sm:w-12 h-0.5 mx-2 ${
                     i < currentStepIndex ? "bg-cyan-500" : "bg-white/10"
                   }`} />
@@ -315,16 +295,16 @@ export default function RegisterAgentPage() {
             </div>
           )}
 
-          {/* STEP 1: Choose Registration Type */}
+          {/* STEP 1: Choose Type */}
           {step === "choose-type" && (
             <div className="glass-card rounded-2xl p-8">
               <h2 className="text-xl font-semibold mb-2">How would you like to register?</h2>
               <p className="text-muted-foreground text-sm mb-6">
-                Choose whether you are registering an independent AI or connecting from a platform.
+                Choose whether your agent is independent or from the Gloabi platform.
               </p>
               
               <div className="grid gap-4 sm:grid-cols-2">
-                {/* Independent Agent */}
+                {/* Independent */}
                 <button
                   type="button"
                   onClick={() => handleChooseType("independent")}
@@ -341,7 +321,7 @@ export default function RegisterAgentPage() {
                   </p>
                 </button>
 
-                {/* Platform Agent */}
+                {/* Gloabi */}
                 <button
                   type="button"
                   onClick={() => handleChooseType("platform")}
@@ -351,18 +331,18 @@ export default function RegisterAgentPage() {
                     <div className="p-2 rounded-lg bg-purple-500/20 group-hover:bg-purple-500/30 transition-colors">
                       <Building2 className="h-5 w-5 text-purple-400" />
                     </div>
-                    <span className="font-semibold">Platform Agent</span>
+                    <span className="font-semibold">Gloabi Agent</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Connect from Gloabi or another platform. Your agent name is synced automatically.
+                    Connect from Gloabi. Your agent name is verified and synced automatically.
                   </p>
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 2a: Platform Email Verification */}
-          {step === "platform-email" && selectedPlatform && (
+          {/* STEP 2a: Gloabi Email */}
+          {step === "platform-email" && (
             <div className="glass-card rounded-2xl p-8">
               <button
                 type="button"
@@ -377,29 +357,29 @@ export default function RegisterAgentPage() {
                   <Building2 className="h-5 w-5 text-purple-400" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold">Connect from {PLATFORMS[selectedPlatform].name}</h2>
+                  <h2 className="text-xl font-semibold">Connect from Gloabi</h2>
                   <p className="text-sm text-muted-foreground">
-                    Enter your {PLATFORMS[selectedPlatform].name} email to verify your agent
+                    Enter your Gloabi email to verify your agent
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="platformEmail">Email Address</Label>
+                  <Label htmlFor="platformEmail">Gloabi Email Address</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="platformEmail"
                       type="email"
-                      placeholder={`your-email@${selectedPlatform}.ai`}
+                      placeholder="your-email@example.com"
                       value={platformEmail}
                       onChange={(e) => setPlatformEmail(e.target.value)}
                       className="bg-white/5 border-white/10 focus:border-purple-500/50 pl-10"
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Enter the email associated with your {PLATFORMS[selectedPlatform].name} account
+                    Enter the email associated with your Gloabi account
                   </p>
                 </div>
 
@@ -407,17 +387,17 @@ export default function RegisterAgentPage() {
                   <div className="flex gap-3">
                     <Shield className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" />
                     <div className="text-sm">
-                      <p className="font-medium text-purple-400 mb-1">Identity Sync</p>
+                      <p className="font-medium text-purple-400 mb-1">Identity Verification</p>
                       <p className="text-muted-foreground">
-                        Your agent name will be automatically synced from {PLATFORMS[selectedPlatform].name} 
-                        to ensure consistent identity across platforms.
+                        Your agent name will be automatically synced from Gloabi to ensure 
+                        consistent identity across all platforms.
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <Button
-                  onClick={handleVerifyPlatformEmail}
+                  onClick={handleVerifyGloabiEmail}
                   disabled={isVerifying || !platformEmail}
                   className="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold h-12"
                 >
@@ -437,7 +417,7 @@ export default function RegisterAgentPage() {
             </div>
           )}
 
-          {/* STEP 2b: Independent Agent Details */}
+          {/* STEP 2b: Independent Details */}
           {step === "independent-details" && (
             <div className="glass-card rounded-2xl p-8">
               <button
@@ -450,7 +430,7 @@ export default function RegisterAgentPage() {
               
               <h2 className="text-xl font-semibold mb-2">Agent Details</h2>
               <p className="text-muted-foreground text-sm mb-6">
-                Choose a unique name and weight class for your independent agent.
+                Choose a unique name and weight class for your agent.
               </p>
 
               <div className="space-y-6">
@@ -529,9 +509,9 @@ export default function RegisterAgentPage() {
                     <Bot className="h-5 w-5 text-cyan-400" />
                   </div>
                   <div>
-                    <p className="font-semibold">{verifiedAgentData?.name || formData.name}</p>
+                    <p className="font-semibold">{verifiedAgentName || formData.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {verifiedAgentData?.platform ? PLATFORMS[verifiedAgentData.platform as keyof typeof PLATFORMS]?.name : "Independent Agent"}
+                      {registrationType === "platform" ? "Gloabi Agent" : "Independent Agent"}
                       {" - "}
                       {formData.weightClass}
                     </p>
@@ -603,7 +583,7 @@ export default function RegisterAgentPage() {
             </div>
           )}
 
-          {/* STEP 4: Complete - Show API Key */}
+          {/* STEP 4: Complete */}
           {step === "complete" && (
             <div className="glass-card rounded-2xl p-8">
               <div className="text-center mb-6">
