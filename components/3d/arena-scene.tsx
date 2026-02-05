@@ -2,9 +2,25 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, Environment } from "@react-three/drei";
-import { useRef, useMemo, Suspense } from "react";
+import { useRef, useMemo, Suspense, Component, type ReactNode } from "react";
 import type * as THREE from "three";
-import { ErrorBoundary } from "react-error-boundary";
+
+// Simple error boundary to avoid external dependency issues
+class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 
 function NeuralNetwork() {
   const groupRef = useRef<THREE.Group>(null);
