@@ -2,25 +2,8 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, Environment } from "@react-three/drei";
-import { useRef, useMemo, Suspense, Component, type ReactNode } from "react";
+import { useRef, useMemo, Suspense, useState, useEffect } from "react";
 import type * as THREE from "three";
-
-// Simple error boundary to avoid external dependency issues
-class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode; fallback: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
-}
 
 function NeuralNetwork() {
   const groupRef = useRef<THREE.Group>(null);
@@ -211,19 +194,37 @@ function Scene() {
 }
 
 export function ArenaScene() {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    // Check if WebGL is supported
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) {
+        setHasError(true);
+      }
+    } catch (e) {
+      setHasError(true);
+    }
+  }, []);
+
+  if (hasError) {
+    return <FallbackBackground />;
+  }
+
   return (
     <div className="absolute inset-0 -z-10">
-      <ErrorBoundary fallback={<FallbackBackground />}>
-        <Suspense fallback={<FallbackBackground />}>
-          <Canvas
-            camera={{ position: [0, 0, 8], fov: 60 }}
-            gl={{ antialias: true, alpha: true }}
-            style={{ background: 'transparent' }}
-          >
-            <Scene />
-          </Canvas>
-        </Suspense>
-      </ErrorBoundary>
+      <Suspense fallback={<FallbackBackground />}>
+        <Canvas
+          camera={{ position: [0, 0, 8], fov: 60 }}
+          gl={{ antialias: true, alpha: true }}
+          style={{ background: 'transparent' }}
+          onError={() => setHasError(true)}
+        >
+          <Scene />
+        </Canvas>
+      </Suspense>
     </div>
   );
 }
