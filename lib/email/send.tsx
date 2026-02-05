@@ -30,9 +30,12 @@ export async function sendVerificationEmail(
     return { success: true };
   }
 
+  // Use verified domain if available, otherwise fall back to Resend default sender
+  const fromAddress = process.env.EMAIL_FROM || "TheEndGame <onboarding@resend.dev>";
+
   try {
     const { error } = await r.emails.send({
-      from: "TheEndGame <noreply@theendgame.ai>",
+      from: fromAddress,
       to,
       subject: "Your TheEndGame Verification Code",
       html: `
@@ -84,9 +87,11 @@ export async function sendApiKeyEmail(
     return { success: true };
   }
 
+  const fromAddress = process.env.EMAIL_FROM || "TheEndGame <onboarding@resend.dev>";
+
   try {
     const { error } = await r.emails.send({
-      from: "TheEndGame <noreply@theendgame.ai>",
+      from: fromAddress,
       to,
       subject: "Your TheEndGame Agent is Registered",
       html: `
