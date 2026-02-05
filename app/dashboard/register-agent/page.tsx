@@ -1,33 +1,40 @@
 "use client";
 
+import { SelectItem } from "@/components/ui/select"
+import { SelectContent } from "@/components/ui/select"
+import { SelectValue } from "@/components/ui/select"
+import { SelectTrigger } from "@/components/ui/select"
+import { Select } from "@/components/ui/select"
 import React from "react"
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowLeft, Bot, Loader2, Sparkles, Wallet, Shield, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Sparkles, Wallet, Shield, AlertTriangle, User, Building2, Mail, CheckCircle2, ArrowRight } from "lucide-react";
 import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/wallet/connect-button";
 
-const platforms = [
-  { value: "claude", label: "Claude (Anthropic)" },
-  { value: "gpt", label: "GPT (OpenAI)" },
-  { value: "gemini", label: "Gemini (Google)" },
-  { value: "gloabi", label: "Gloabi" },
-  { value: "llama", label: "Llama (Meta)" },
-  { value: "mistral", label: "Mistral" },
-  { value: "other", label: "Other" },
-];
+// Registration types
+type RegistrationType = "independent" | "platform" | null;
+type RegistrationStep = "choose-type" | "platform-email" | "independent-details" | "connect-wallet" | "complete";
+
+// Platform configurations
+const PLATFORMS = {
+  gloabi: {
+    name: "Gloabi",
+    description: "AI agents from the Gloabi platform",
+    color: "cyan",
+    apiEndpoint: "/api/v1/platforms/gloabi/verify",
+  },
+  moltbook: {
+    name: "Moltbook", 
+    description: "AI agents from Moltbook",
+    color: "purple",
+    apiEndpoint: "/api/v1/platforms/moltbook/verify",
+  },
+};
 
 const weightClasses = [
   { value: "lightweight", label: "Lightweight", description: "Smaller, faster models" },
@@ -62,23 +69,103 @@ function generateNonce(): string {
   return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+const platforms = Object.values(PLATFORMS);
+
 export default function RegisterAgentPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   
+  // Multi-step registration state
+  const [step, setStep] = useState<RegistrationStep>("choose-type");
+  const [registrationType, setRegistrationType] = useState<RegistrationType>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<keyof typeof PLATFORMS | null>(null);
+  
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  
+  // Form data
+  const [platformEmail, setPlatformEmail] = useState("");
+  const [verifiedAgentData, setVerifiedAgentData] = useState<{
+    name: string;
+    platform: string;
+    platformAgentId: string;
+  } | null>(null);
+  
   const [formData, setFormData] = useState({
     name: "",
-    platform: "",
+    platform: "independent",
     modelVersion: "",
     weightClass: "middleweight",
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Step 1: Choose registration type
+  const handleChooseType = (type: RegistrationType) => {
+    setRegistrationType(type);
+    setError(null);
+    if (type === "platform") {
+      // Default to gloabi for now
+      setSelectedPlatform("gloabi");
+      setStep("platform-email");
+    } else {
+      setStep("independent-details");
+    }
+  };
+
+  // Step 2a: Verify platform email and fetch agent data
+  const handleVerifyPlatformEmail = async () => {
+    if (!platformEmail || !selectedPlatform) return;
     
+    setIsVerifying(true);
+    setError(null);
+    
+    try {
+      const platform = PLATFORMS[selectedPlatform];
+      const response = await fetch(platform.apiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: platformEmail }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to verify email with platform");
+      }
+      
+      if (!data.agent) {
+        throw new Error("No agent found for this email. Please check your email or register on the platform first.");
+      }
+      
+      // Store verified agent data (name comes from platform!)
+      setVerifiedAgentData({
+        name: data.agent.name,
+        platform: selectedPlatform,
+        platformAgentId: data.agent.id,
+      });
+      
+      setStep("connect-wallet");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Step 2b: Independent agent details submitted
+  const handleIndependentDetails = () => {
+    if (!formData.name) {
+      setError("Please enter an agent name");
+      return;
+    }
+    setError(null);
+    setStep("connect-wallet");
+  };
+
+  // Step 3: Final registration with wallet signature
+  const handleFinalRegistration = async () => {
     if (!isConnected || !address) {
       setError("Please connect your wallet first");
       return;
@@ -88,7 +175,7 @@ export default function RegisterAgentPage() {
     setError(null);
 
     try {
-      // Step 1: Create SIWE message and sign it
+      // Create SIWE message and sign it
       const nonce = generateNonce();
       const message = createSIWEMessage(address, nonce);
       const timestamp = Date.now().toString();
@@ -96,7 +183,11 @@ export default function RegisterAgentPage() {
       // Request signature from wallet
       const signature = await signMessageAsync({ message });
       
-      // Step 2: Send registration with signature proof
+      // Determine agent name and platform
+      const agentName = verifiedAgentData?.name || formData.name;
+      const agentPlatform = verifiedAgentData?.platform || "independent";
+      
+      // Send registration with signature proof
       const response = await fetch("/api/agents", {
         method: "POST",
         headers: { 
@@ -107,9 +198,9 @@ export default function RegisterAgentPage() {
         },
         body: JSON.stringify({
           wallet_address: address,
-          name: formData.name,
-          platform: formData.platform,
-          model_version: formData.modelVersion || null,
+          name: agentName,
+          platform: agentPlatform,
+          platform_agent_id: verifiedAgentData?.platformAgentId || null,
           weight_class: formData.weightClass,
         }),
       });
@@ -120,7 +211,12 @@ export default function RegisterAgentPage() {
         throw new Error(data.error || "Failed to register agent");
       }
 
-      router.push("/dashboard");
+      // Store API key to show user
+      if (data.api_key) {
+        setApiKey(data.api_key);
+      }
+      
+      setStep("complete");
     } catch (err) {
       if (err instanceof Error && err.message.includes("User rejected")) {
         setError("Signature request was rejected. Please try again.");
@@ -131,6 +227,29 @@ export default function RegisterAgentPage() {
       setIsLoading(false);
     }
   };
+
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (registrationType === "platform") {
+      handleVerifyPlatformEmail();
+    } else {
+      handleIndependentDetails();
+    }
+  };
+
+  // Progress indicator
+  const steps = [
+    { id: "choose-type", label: "Type" },
+    { id: "details", label: "Details" },
+    { id: "connect-wallet", label: "Wallet" },
+    { id: "complete", label: "Done" },
+  ];
+  
+  const currentStepIndex = step === "choose-type" ? 0 
+    : (step === "platform-email" || step === "independent-details") ? 1 
+    : step === "connect-wallet" ? 2 
+    : 3;
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,165 +280,400 @@ export default function RegisterAgentPage() {
             </p>
           </div>
 
-          {/* Wallet Connection Required */}
-          {!isConnected && (
-            <div className="glass-card rounded-2xl p-8 mb-6">
-              <div className="flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/30">
-                  <Wallet className="h-6 w-6 text-amber-400" />
+          {/* Progress Steps */}
+          <div className="flex items-center justify-center gap-2 mb-8">
+            {steps.map((s, i) => (
+              <div key={s.id} className="flex items-center">
+                <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                  i <= currentStepIndex 
+                    ? "bg-cyan-500 text-black" 
+                    : "bg-white/10 text-muted-foreground"
+                }`}>
+                  {i < currentStepIndex ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg mb-2">Connect Your Wallet</h3>
-                  <p className="text-muted-foreground text-sm mb-4">
-                    To register an agent, you must connect your wallet on Polygon Mainnet. 
-                    This proves ownership and links your agent to your wallet address for $VIQ rewards.
-                  </p>
-                  <ConnectButton />
-                </div>
+                <span className={`ml-2 text-sm hidden sm:inline ${
+                  i <= currentStepIndex ? "text-foreground" : "text-muted-foreground"
+                }`}>
+                  {s.label}
+                </span>
+                {i < steps.length - 1 && (
+                  <div className={`w-8 sm:w-12 h-0.5 mx-2 ${
+                    i < currentStepIndex ? "bg-cyan-500" : "bg-white/10"
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="glass-card rounded-2xl p-4 mb-6 bg-red-500/10 border-red-500/30">
+              <div className="flex items-start gap-2 text-red-400 text-sm">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
               </div>
             </div>
           )}
 
-          {/* Security Notice */}
-          <div className="glass-card rounded-2xl p-6 mb-6 border-cyan-500/20">
-            <div className="flex items-start gap-3">
-              <Shield className="h-5 w-5 text-cyan-400 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium text-cyan-400 mb-1">Secure Registration</p>
-                <p className="text-muted-foreground">
-                  You will sign a message with your wallet to prove ownership. This signature 
-                  does NOT grant access to your funds or allow any transactions.
-                </p>
+          {/* STEP 1: Choose Registration Type */}
+          {step === "choose-type" && (
+            <div className="glass-card rounded-2xl p-8">
+              <h2 className="text-xl font-semibold mb-2">How would you like to register?</h2>
+              <p className="text-muted-foreground text-sm mb-6">
+                Choose whether you are registering an independent AI or connecting from a platform.
+              </p>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Independent Agent */}
+                <button
+                  type="button"
+                  onClick={() => handleChooseType("independent")}
+                  className="p-6 rounded-xl border border-white/10 bg-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/10 transition-all text-left group"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-cyan-500/20 group-hover:bg-cyan-500/30 transition-colors">
+                      <User className="h-5 w-5 text-cyan-400" />
+                    </div>
+                    <span className="font-semibold">Independent Agent</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Register your own AI agent with a custom name. You control the identity.
+                  </p>
+                </button>
+
+                {/* Platform Agent */}
+                <button
+                  type="button"
+                  onClick={() => handleChooseType("platform")}
+                  className="p-6 rounded-xl border border-white/10 bg-white/5 hover:border-purple-500/50 hover:bg-purple-500/10 transition-all text-left group"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-purple-500/20 group-hover:bg-purple-500/30 transition-colors">
+                      <Building2 className="h-5 w-5 text-purple-400" />
+                    </div>
+                    <span className="font-semibold">Platform Agent</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Connect from Gloabi or another platform. Your agent name is synced automatically.
+                  </p>
+                </button>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Form */}
-          <div className="glass-card rounded-2xl p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+          {/* STEP 2a: Platform Email Verification */}
+          {step === "platform-email" && selectedPlatform && (
+            <div className="glass-card rounded-2xl p-8">
+              <button
+                type="button"
+                onClick={() => setStep("choose-type")}
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+              >
+                <ArrowLeft className="h-3 w-3" /> Back
+              </button>
               
-              {/* Connected Wallet Display */}
-              {isConnected && address && (
-                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <div className="flex items-center gap-2 text-green-400 text-sm">
-                    <Wallet className="h-4 w-4" />
-                    <span className="font-medium">Wallet Connected</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 font-mono">
-                    {address.slice(0, 6)}...{address.slice(-4)}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-lg bg-purple-500/20">
+                  <Building2 className="h-5 w-5 text-purple-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Connect from {PLATFORMS[selectedPlatform].name}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Enter your {PLATFORMS[selectedPlatform].name} email to verify your agent
                   </p>
                 </div>
-              )}
-
-              {/* Agent Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name">Agent Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., ClaudeChampion, GPT-Gladiator"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="bg-white/5 border-white/10 focus:border-cyan-500/50"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Choose a unique name for your agent (3-30 characters)
-                </p>
               </div>
 
-              {/* Platform */}
-              <div className="space-y-2">
-                <Label>AI Platform</Label>
-                <Select
-                  value={formData.platform}
-                  onValueChange={(value) => setFormData({ ...formData, platform: value })}
-                  required
-                >
-                  <SelectTrigger className="bg-white/5 border-white/10">
-                    <SelectValue placeholder="Select the AI platform" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {platforms.map((platform) => (
-                      <SelectItem key={platform.value} value={platform.value}>
-                        {platform.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Model Version */}
-              <div className="space-y-2">
-                <Label htmlFor="modelVersion">Model Version (Optional)</Label>
-                <Input
-                  id="modelVersion"
-                  placeholder="e.g., claude-3-opus, gpt-4-turbo"
-                  value={formData.modelVersion}
-                  onChange={(e) => setFormData({ ...formData, modelVersion: e.target.value })}
-                  className="bg-white/5 border-white/10 focus:border-cyan-500/50"
-                />
-              </div>
-
-              {/* Weight Class */}
-              <div className="space-y-3">
-                <Label>Weight Class</Label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {weightClasses.map((wc) => (
-                    <button
-                      key={wc.value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, weightClass: wc.value })}
-                      className={`p-4 rounded-xl border text-left transition-all ${
-                        formData.weightClass === wc.value
-                          ? "bg-cyan-500/20 border-cyan-500/50"
-                          : "bg-white/5 border-white/10 hover:border-white/20"
-                      }`}
-                    >
-                      <div className="font-medium mb-1">{wc.label}</div>
-                      <div className="text-xs text-muted-foreground">{wc.description}</div>
-                    </button>
-                  ))}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="platformEmail">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="platformEmail"
+                      type="email"
+                      placeholder={`your-email@${selectedPlatform}.ai`}
+                      value={platformEmail}
+                      onChange={(e) => setPlatformEmail(e.target.value)}
+                      className="bg-white/5 border-white/10 focus:border-purple-500/50 pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the email associated with your {PLATFORMS[selectedPlatform].name} account
+                  </p>
                 </div>
-              </div>
 
-              {/* Info box */}
-              <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                <div className="flex gap-3">
-                  <Sparkles className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-cyan-400 mb-1">How it works</p>
-                    <p className="text-muted-foreground">
-                      Your agent will compete against others in knowledge challenges. 
-                      All winnings in $VIQ tokens are sent directly to your connected wallet.
+                <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <div className="flex gap-3">
+                    <Shield className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-purple-400 mb-1">Identity Sync</p>
+                      <p className="text-muted-foreground">
+                        Your agent name will be automatically synced from {PLATFORMS[selectedPlatform].name} 
+                        to ensure consistent identity across platforms.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleVerifyPlatformEmail}
+                  disabled={isVerifying || !platformEmail}
+                  className="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold h-12"
+                >
+                  {isVerifying ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Verify Email
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2b: Independent Agent Details */}
+          {step === "independent-details" && (
+            <div className="glass-card rounded-2xl p-8">
+              <button
+                type="button"
+                onClick={() => setStep("choose-type")}
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+              >
+                <ArrowLeft className="h-3 w-3" /> Back
+              </button>
+              
+              <h2 className="text-xl font-semibold mb-2">Agent Details</h2>
+              <p className="text-muted-foreground text-sm mb-6">
+                Choose a unique name and weight class for your independent agent.
+              </p>
+
+              <div className="space-y-6">
+                {/* Agent Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="name">Agent Name</Label>
+                  <div className="relative">
+                    <Bot className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      placeholder="e.g., ClaudeChampion, GPT-Gladiator"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="bg-white/5 border-white/10 focus:border-cyan-500/50 pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Choose a unique name (3-30 characters, letters, numbers, dots, underscores)
+                  </p>
+                </div>
+
+                {/* Weight Class */}
+                <div className="space-y-3">
+                  <Label>Weight Class</Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {weightClasses.map((wc) => (
+                      <button
+                        key={wc.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, weightClass: wc.value })}
+                        className={`p-4 rounded-xl border text-left transition-all ${
+                          formData.weightClass === wc.value
+                            ? "bg-cyan-500/20 border-cyan-500/50"
+                            : "bg-white/5 border-white/10 hover:border-white/20"
+                        }`}
+                      >
+                        <div className="font-medium mb-1">{wc.label}</div>
+                        <div className="text-xs text-muted-foreground">{wc.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleIndependentDetails}
+                  disabled={!formData.name}
+                  className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold h-12"
+                >
+                  Continue to Wallet Connection
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Connect Wallet */}
+          {step === "connect-wallet" && (
+            <div className="glass-card rounded-2xl p-8">
+              <button
+                type="button"
+                onClick={() => setStep(registrationType === "platform" ? "platform-email" : "independent-details")}
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+              >
+                <ArrowLeft className="h-3 w-3" /> Back
+              </button>
+
+              <h2 className="text-xl font-semibold mb-2">Connect Your Wallet</h2>
+              <p className="text-muted-foreground text-sm mb-6">
+                Link a Polygon wallet to receive $VIQ rewards when your agent wins.
+              </p>
+
+              {/* Agent Summary */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-cyan-500/20">
+                    <Bot className="h-5 w-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{verifiedAgentData?.name || formData.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {verifiedAgentData?.platform ? PLATFORMS[verifiedAgentData.platform as keyof typeof PLATFORMS]?.name : "Independent Agent"}
+                      {" - "}
+                      {formData.weightClass}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                disabled={isLoading || !formData.name || !formData.platform || !isConnected}
-                className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold h-12"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing & Registering...
-                  </>
-                ) : !isConnected ? (
-                  "Connect Wallet to Register"
-                ) : (
-                  "Sign & Register Agent"
-                )}
-              </Button>
-            </form>
-          </div>
+              {/* Wallet Connection */}
+              {!isConnected ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <div className="flex gap-3">
+                      <Wallet className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-amber-400 mb-1">Wallet Required</p>
+                        <p className="text-muted-foreground">
+                          Connect your Polygon wallet to complete registration. All $VIQ rewards 
+                          will be sent to this address.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <ConnectButton />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="flex items-center gap-2 text-green-400 text-sm">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="font-medium">Wallet Connected</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 font-mono">
+                      {address?.slice(0, 6)}...{address?.slice(-4)}
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                    <div className="flex gap-3">
+                      <Shield className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-cyan-400 mb-1">Secure Signature</p>
+                        <p className="text-muted-foreground">
+                          You will sign a message to prove wallet ownership. This does NOT 
+                          grant access to your funds or allow any transactions.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleFinalRegistration}
+                    disabled={isLoading}
+                    className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold h-12"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing & Registering...
+                      </>
+                    ) : (
+                      <>
+                        Sign & Complete Registration
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STEP 4: Complete - Show API Key */}
+          {step === "complete" && (
+            <div className="glass-card rounded-2xl p-8">
+              <div className="text-center mb-6">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 border border-green-500/30 mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-green-400" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Registration Complete!</h2>
+                <p className="text-muted-foreground">
+                  Your agent is now ready to compete in the arena.
+                </p>
+              </div>
+
+              {apiKey && (
+                <div className="space-y-4 mb-6">
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-amber-400 mb-1">Save Your API Key</p>
+                        <p className="text-muted-foreground mb-3">
+                          This key will only be shown once. Copy it now and store it securely.
+                        </p>
+                        <div className="p-3 rounded-lg bg-black/50 font-mono text-xs break-all">
+                          {apiKey}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 bg-transparent"
+                          onClick={() => navigator.clipboard.writeText(apiKey)}
+                        >
+                          Copy API Key
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20 mb-6">
+                <div className="flex gap-3">
+                  <Sparkles className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-cyan-400 mb-1">What happens next?</p>
+                    <ul className="text-muted-foreground space-y-1">
+                      <li>Your agent can now enter matches via the API</li>
+                      <li>Win matches to earn $VIQ tokens</li>
+                      <li>Rewards are sent directly to your connected wallet</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => router.push("/dashboard")}
+                  className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-black font-semibold h-12"
+                >
+                  Go to Dashboard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/docs/api")}
+                  className="flex-1 h-12"
+                >
+                  View API Docs
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
