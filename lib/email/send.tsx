@@ -1,108 +1,136 @@
-/**
- * Email sending service.
- * 
- * Uses Resend in production (set RESEND_API_KEY env var).
- * Falls back to console logging in development.
- */
+import { Resend } from "resend";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.EMAIL_FROM || "TheEndGame <noreply@theendgame.ai>";
+let resend: Resend | null = null;
 
-interface SendEmailParams {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
+function getResend(): Resend | null {
+  if (resend) return resend;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  resend = new Resend(apiKey);
+  return resend;
 }
 
-interface SendEmailResult {
+interface EmailResult {
   success: boolean;
   error?: string;
 }
 
-export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const { to, subject, html, text } = params;
-
-  // If Resend API key is configured, send via Resend
-  if (RESEND_API_KEY) {
-    try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          from: FROM_EMAIL,
-          to: [to],
-          subject,
-          html,
-          text,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.error("Resend API error:", res.status, body);
-        return { success: false, error: `Email service error: ${res.status}` };
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error("Email send failed:", err);
-      return { success: false, error: "Failed to send email" };
-    }
-  }
-
-  // No email provider configured - log to console (dev mode)
-  console.log("------- EMAIL (no provider configured) -------");
-  console.log(`To: ${to}`);
-  console.log(`Subject: ${subject}`);
-  console.log(`Body: ${text || html}`);
-  console.log("----------------------------------------------");
-  return { success: true };
-}
-
 /**
  * Send a verification code email.
+ * Falls back to console.log if Resend is not configured.
  */
 export async function sendVerificationEmail(
   to: string,
   code: string
-): Promise<SendEmailResult> {
-  return sendEmail({
-    to,
-    subject: `${code} is your TheEndGame verification code`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #0ff; margin-bottom: 8px;">TheEndGame</h2>
-        <p style="color: #666; font-size: 14px; margin-bottom: 24px;">AI Agent Arena</p>
-        <hr style="border: 1px solid #eee; margin: 16px 0;" />
-        <p style="font-size: 16px; color: #333;">Your verification code is:</p>
-        <div style="
-          background: #f4f4f5;
-          border-radius: 8px;
-          padding: 20px;
-          text-align: center;
-          margin: 16px 0;
-          letter-spacing: 8px;
-          font-size: 32px;
-          font-weight: bold;
-          color: #111;
-          font-family: monospace;
-        ">${code}</div>
-        <p style="font-size: 14px; color: #666;">
-          This code expires in <strong>5 minutes</strong>.
-        </p>
-        <p style="font-size: 14px; color: #666;">
-          If you did not request this code, you can safely ignore this email.
-        </p>
-        <hr style="border: 1px solid #eee; margin: 24px 0 16px;" />
-        <p style="font-size: 12px; color: #999;">
-          TheEndGame - Where AI Agents Compete for $VIQ
-        </p>
-      </div>
-    `,
-    text: `Your TheEndGame verification code is: ${code}\n\nThis code expires in 5 minutes.\n\nIf you did not request this code, ignore this email.`,
-  });
+): Promise<EmailResult> {
+  const r = getResend();
+
+  if (!r) {
+    console.log(`[EMAIL FALLBACK] Verification code for ${to}: ${code}`);
+    return { success: true };
+  }
+
+  try {
+    const { error } = await r.emails.send({
+      from: "TheEndGame <noreply@theendgame.ai>",
+      to,
+      subject: "Your TheEndGame Verification Code",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 24px; font-weight: 700; color: #0a0a0a; margin: 0;">TheEndGame</h1>
+            <p style="font-size: 14px; color: #666; margin-top: 4px;">AI Agent Arena</p>
+          </div>
+          <div style="background: #f8f9fa; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
+            <p style="font-size: 14px; color: #666; margin: 0 0 16px 0;">Your verification code is:</p>
+            <div style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #0a0a0a; font-family: monospace; padding: 12px 0;">
+              ${code}
+            </div>
+            <p style="font-size: 13px; color: #999; margin: 16px 0 0 0;">This code expires in 5 minutes.</p>
+          </div>
+          <p style="font-size: 13px; color: #999; text-align: center; margin: 0;">
+            If you did not request this code, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("[EMAIL ERROR]", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("[EMAIL ERROR]", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to send email",
+    };
+  }
+}
+
+/**
+ * Send an API key delivery email after successful registration.
+ */
+export async function sendApiKeyEmail(
+  to: string,
+  apiKeyPrefix: string
+): Promise<EmailResult> {
+  const r = getResend();
+
+  if (!r) {
+    console.log(`[EMAIL FALLBACK] API key confirmation for ${to}: ${apiKeyPrefix}...`);
+    return { success: true };
+  }
+
+  try {
+    const { error } = await r.emails.send({
+      from: "TheEndGame <noreply@theendgame.ai>",
+      to,
+      subject: "Your TheEndGame Agent is Registered",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 24px; font-weight: 700; color: #0a0a0a; margin: 0;">TheEndGame</h1>
+            <p style="font-size: 14px; color: #666; margin-top: 4px;">AI Agent Arena</p>
+          </div>
+          <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: #0a0a0a; margin: 0 0 12px 0;">Agent Registered Successfully</h2>
+            <p style="font-size: 14px; color: #666; margin: 0 0 16px 0;">
+              Your API key starts with: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px;">${apiKeyPrefix}...</code>
+            </p>
+            <p style="font-size: 13px; color: #999; margin: 0;">
+              If you did not save your full API key during registration, you will need to generate a new one from your dashboard.
+            </p>
+          </div>
+          <div style="background: #fff3cd; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+            <p style="font-size: 13px; color: #856404; margin: 0;">
+              <strong>Next steps:</strong><br/>
+              1. Use your API key to sync your AI agent name<br/>
+              2. Connect your wallet on theendgame.ai<br/>
+              3. Provide your AI name to claim your agent<br/>
+              4. Start competing to earn $VIQ
+            </p>
+          </div>
+          <p style="font-size: 13px; color: #999; text-align: center; margin: 0;">
+            Need help? Visit our docs at theendgame.ai/docs
+          </p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error("[EMAIL ERROR]", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("[EMAIL ERROR]", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to send email",
+    };
+  }
 }

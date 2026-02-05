@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { getCorsHeaders, corsResponse } from "@/lib/security/cors";
 import { RATE_LIMITS, withRateLimit, verifyCode } from "@/lib/security/rate-limit";
 import { generateApiKey } from "@/lib/security/api-keys";
+import { sendApiKeyEmail } from "@/lib/email/send";
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -149,6 +150,9 @@ export async function POST(request: NextRequest) {
     if (keyError) {
       console.error("Error creating API key:", keyError);
     }
+
+    // Send confirmation email (non-blocking, don't fail registration if email fails)
+    sendApiKeyEmail(email.toLowerCase(), prefix).catch(() => {});
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://theendgame.ai";
 
