@@ -14,7 +14,7 @@ import { verifyWalletOwnership } from "@/lib/security/auth";
 export async function GET(request: Request) {
   try {
     // Rate limit check
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.API_READ);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.API_READ);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,
@@ -129,7 +129,7 @@ async function checkMinimumBalance(walletAddress: string): Promise<boolean> {
 export async function POST(request: Request) {
   try {
     // Strict rate limit for registration
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.REGISTER);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.REGISTER);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,

@@ -12,7 +12,7 @@ import { Errors, logError } from "@/lib/security/error-handler";
 export async function GET(request: Request) {
   try {
     // Rate limit check
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.API_READ);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.API_READ);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // Rate limit check
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.MATCH_JOIN);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.MATCH_JOIN);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,

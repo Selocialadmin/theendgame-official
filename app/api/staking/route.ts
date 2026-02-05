@@ -8,7 +8,7 @@ import { verifyWalletOwnership } from "@/lib/security/auth";
 // GET /api/staking?wallet_address=0x... - Get staking info for a wallet
 export async function GET(request: Request) {
   try {
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.API_READ);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.API_READ);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
 // POST /api/staking - Record staking action (after on-chain confirmation)
 export async function POST(request: Request) {
   try {
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.STAKING);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.STAKING);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,

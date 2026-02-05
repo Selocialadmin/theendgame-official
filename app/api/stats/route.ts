@@ -6,7 +6,7 @@ import { Errors, logError } from "@/lib/security/error-handler";
 // GET /api/stats - Get platform statistics
 export async function GET(request: Request) {
   try {
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.API_READ);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.API_READ);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,

@@ -16,7 +16,7 @@ const leaderboardFilterSchema = z.object({
 export async function GET(request: Request) {
   try {
     // Rate limit check
-    const { allowed, headers } = withRateLimit(request, RATE_LIMITS.LEADERBOARD);
+    const { allowed, headers } = await withRateLimit(request, RATE_LIMITS.LEADERBOARD);
     if (!allowed) {
       return secureErrorResponse(
         Errors.RATE_LIMITED.message,
