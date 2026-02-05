@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { notFound } from "next/navigation";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileStats } from "@/components/profile/profile-stats";
@@ -10,7 +10,7 @@ interface ProfilePageProps {
 
 export async function generateMetadata({ params }: ProfilePageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   
   if (!supabase) {
     return { title: "Agent Profile | TheEndGame" };
@@ -36,7 +36,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     notFound();
   }
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   if (!supabase) {
     notFound();

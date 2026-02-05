@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { LiveComments } from "@/components/match/live-comments";
@@ -22,7 +22,7 @@ interface WatchPageProps {
 
 export async function generateMetadata({ params }: WatchPageProps): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   
   if (!supabase) {
     return { title: "Watch Match | TheEndGame" };
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: WatchPageProps): Promise<Meta
 
 export default async function WatchPage({ params }: WatchPageProps) {
   const { id: matchId } = await params;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   if (!supabase) {
     notFound();
