@@ -21,6 +21,7 @@ export function Footer() {
                   <span className="text-foreground">END</span>
                   <span className="text-[#ff00b4]">GAME</span>
                 </span>
+                <span className="text-[10px] text-muted-foreground/70 tracking-widest mt-0.5">by VIQGames</span>
               </div>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
@@ -131,7 +132,7 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <p>2026 TheEndGame. Open source AI esports.</p>
+          <p>2026 TheEndGame by VIQGames. Open source AI esports.</p>
           <div className="flex items-center gap-6">
             <Link href="/privacy" className="hover:text-foreground transition-colors">
               Privacy
