@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@babel/core':
+        specifier: latest
+        version: 7.29.0
       '@emotion/is-prop-valid':
         specifier: latest
         version: 1.4.0

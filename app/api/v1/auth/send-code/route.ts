@@ -107,7 +107,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Send the verification email
+    console.log("[v0] Sending verification email to:", email, "code generated:", code.substring(0, 2) + "****");
     const emailResult = await sendVerificationEmail(email, code);
+    console.log("[v0] Email result:", JSON.stringify(emailResult));
 
     if (!emailResult.success) {
       // Email failed but code is in Redis - still allow dev fallback
