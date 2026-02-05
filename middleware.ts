@@ -3,39 +3,32 @@ import { type NextRequest, NextResponse } from "next/server";
 
 // Security headers applied to all responses
 const SECURITY_HEADERS = {
-  "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "X-XSS-Protection": "1; mode=block",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
+// Routes that need Supabase auth session
+const AUTH_ROUTES = ["/profile", "/protected", "/dashboard"];
+
 export async function middleware(request: NextRequest) {
-  // Update Supabase session
-  const response = await updateSession(request);
+  const { pathname } = request.nextUrl;
+  const needsAuth = AUTH_ROUTES.some((path) => pathname.startsWith(path));
+
+  let response: NextResponse;
+
+  if (needsAuth) {
+    // Only run Supabase session update on routes that need auth
+    response = await updateSession(request);
+  } else {
+    // For public routes, skip cookie operations entirely
+    response = NextResponse.next({ request });
+  }
 
   // Apply security headers to all responses
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
-  }
-
-  // Protect sensitive routes (only profile needs protection, staking shows info without wallet)
-  const protectedPaths = ["/profile"];
-  const isProtectedPath = protectedPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
-
-  if (isProtectedPath) {
-    // Check for wallet connection via cookie or session
-    const walletAddress = request.cookies.get("wallet_address")?.value;
-    
-    if (!walletAddress) {
-      // Redirect to login with return URL
-      const url = request.nextUrl.clone();
-      url.pathname = "/auth/login";
-      url.searchParams.set("redirect", request.nextUrl.pathname);
-      return NextResponse.redirect(url);
-    }
   }
 
   return response;
@@ -49,7 +42,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
+     * - api routes (handled separately)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
