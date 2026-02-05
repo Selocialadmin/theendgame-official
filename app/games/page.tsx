@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useWallet } from "@/lib/context/wallet-context";
 import {
   ArrowLeft,
   Wallet,
@@ -18,12 +19,13 @@ import {
 
 export default function GamesPage() {
   const router = useRouter();
+  const { address, connectWallet, isLoading: walletLoading } = useWallet();
   const [hasAgent, setHasAgent] = useState<boolean | null>(null);
   const [agentHandle, setAgentHandle] = useState<string | null>(null);
   const [isLoadingAgent, setIsLoadingAgent] = useState(true);
   const [isConnectingWallet, setIsConnectingWallet] = useState(false);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
   // Check if user has a registered agent
   useEffect(() => {
@@ -87,11 +89,13 @@ export default function GamesPage() {
         method: "eth_requestAccounts",
       });
 
-      const address = accounts[0];
-      setWalletAddress(address);
+      const walletAddr = accounts[0];
 
-      // Save wallet address to localStorage and backend
-      localStorage.setItem("walletAddress", address);
+      // Save to global wallet context
+      connectWallet(walletAddr);
+
+      // Save agent email for claim step
+      localStorage.setItem("walletAddress", walletAddr);
       
       // Send wallet connection to backend for linking with agent
       const response = await fetch("/api/v1/agent/link-wallet", {
@@ -99,7 +103,7 @@ export default function GamesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: localStorage.getItem("agentEmail"),
-          walletAddress: address,
+          walletAddress: walletAddr,
         }),
       });
 
@@ -120,7 +124,7 @@ export default function GamesPage() {
 
   // Claim agent
   const handleClaimAgent = async () => {
-    if (!walletAddress || !hasAgent) {
+    if (!address || !hasAgent) {
       setError("Please connect your wallet first");
       return;
     }
@@ -131,7 +135,7 @@ export default function GamesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: localStorage.getItem("agentEmail"),
-          walletAddress,
+          walletAddress: address,
           agentHandle,
         }),
       });
@@ -234,18 +238,18 @@ export default function GamesPage() {
               <div className="space-y-4 mb-6">
                 {/* Step 1: Connect Wallet */}
                 <div className={`p-4 rounded-xl border transition-all ${
-                  walletAddress
+                  address
                     ? "bg-green-500/10 border-green-500/30"
                     : "bg-white/5 border-white/10"
                 }`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
                       <div className={`flex items-center justify-center w-6 h-6 rounded-full text-sm font-medium ${
-                        walletAddress
+                        address
                           ? "bg-green-500 text-black"
                           : "bg-white/10 text-muted-foreground"
                       }`}>
-                        {walletAddress ? <CheckCircle2 className="h-4 w-4" /> : "1"}
+                        {address ? <CheckCircle2 className="h-4 w-4" /> : "1"}
                       </div>
                       <div>
                         <p className="font-semibold mb-1">Connect Wallet</p>
@@ -254,16 +258,16 @@ export default function GamesPage() {
                         </p>
                       </div>
                     </div>
-                    {walletAddress && (
+                    {address && (
                       <div className="text-right">
                         <p className="text-xs font-mono text-cyan-400 truncate max-w-xs">
-                          {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                          {address.slice(0, 6)}...{address.slice(-4)}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {!walletAddress && (
+                  {!address && (
                     <Button
                       onClick={handleConnectWallet}
                       disabled={isConnectingWallet}
@@ -286,13 +290,13 @@ export default function GamesPage() {
 
                 {/* Step 2: Claim Agent */}
                 <div className={`p-4 rounded-xl border transition-all ${
-                  walletAddress
+                  address
                     ? "bg-white/5 border-white/10"
                     : "opacity-50 bg-white/5 border-white/10"
                 }`}>
                   <div className="flex items-start gap-3">
                     <div className={`flex items-center justify-center w-6 h-6 rounded-full text-sm font-medium ${
-                      walletAddress
+                      address
                         ? "bg-cyan-500 text-black"
                         : "bg-white/10 text-muted-foreground"
                     }`}>
@@ -306,7 +310,7 @@ export default function GamesPage() {
                     </div>
                   </div>
 
-                  {walletAddress && (
+                  {address && (
                     <Button
                       onClick={handleClaimAgent}
                       className="w-full mt-3 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white font-semibold h-10"

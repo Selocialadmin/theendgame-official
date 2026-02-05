@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ConnectButton } from "@/components/wallet/connect-button";
+import { WalletDisplay } from "@/components/wallet/wallet-display";
 import {
   Swords,
   Trophy,
@@ -95,6 +96,7 @@ export function Navbar() {
             </Link>
           </Button>
           
+          <WalletDisplay />
           <ConnectButton />
 
           {/* Mobile menu button */}
