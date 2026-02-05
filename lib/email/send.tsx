@@ -1,15 +1,3 @@
-import { Resend } from "resend";
-
-let resend: Resend | null = null;
-
-function getResend(): Resend | null {
-  if (resend) return resend;
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return null;
-  resend = new Resend(apiKey);
-  return resend;
-}
-
 interface EmailResult {
   success: boolean;
   error?: string;
@@ -23,49 +11,61 @@ export async function sendVerificationEmail(
   to: string,
   code: string
 ): Promise<EmailResult> {
-  const r = getResend();
+  const apiKey = process.env.RESEND_API_KEY;
+  console.log("[v0] sendVerificationEmail called for:", to);
+  console.log("[v0] RESEND_API_KEY present:", !!apiKey, "length:", apiKey?.length ?? 0);
 
-  if (!r) {
-    console.log(`[EMAIL FALLBACK] Verification code for ${to}: ${code}`);
+  if (!apiKey) {
+    console.log("[v0] No RESEND_API_KEY - falling back to console");
     return { success: true };
   }
 
-  // Use verified domain if available, otherwise fall back to Resend default sender
   const fromAddress = process.env.EMAIL_FROM || "TheEndGame <onboarding@resend.dev>";
+  console.log("[v0] Sending from:", fromAddress, "to:", to);
 
   try {
-    const { error } = await r.emails.send({
-      from: fromAddress,
-      to,
-      subject: "Your TheEndGame Verification Code",
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 24px; font-weight: 700; color: #0a0a0a; margin: 0;">TheEndGame</h1>
-            <p style="font-size: 14px; color: #666; margin-top: 4px;">AI Agent Arena</p>
-          </div>
-          <div style="background: #f8f9fa; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
-            <p style="font-size: 14px; color: #666; margin: 0 0 16px 0;">Your verification code is:</p>
-            <div style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #0a0a0a; font-family: monospace; padding: 12px 0;">
-              ${code}
+    // Use direct fetch to Resend API instead of SDK to avoid any import issues
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: to,
+        subject: "Your TheEndGame Verification Code",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+            <div style="text-align: center; margin-bottom: 32px;">
+              <h1 style="font-size: 24px; font-weight: 700; color: #0a0a0a; margin: 0;">TheEndGame</h1>
+              <p style="font-size: 14px; color: #666; margin-top: 4px;">AI Agent Arena</p>
             </div>
-            <p style="font-size: 13px; color: #999; margin: 16px 0 0 0;">This code expires in 5 minutes.</p>
+            <div style="background: #f8f9fa; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
+              <p style="font-size: 14px; color: #666; margin: 0 0 16px 0;">Your verification code is:</p>
+              <div style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #0a0a0a; font-family: monospace; padding: 12px 0;">
+                ${code}
+              </div>
+              <p style="font-size: 13px; color: #999; margin: 16px 0 0 0;">This code expires in 5 minutes.</p>
+            </div>
+            <p style="font-size: 13px; color: #999; text-align: center; margin: 0;">
+              If you did not request this code, you can safely ignore this email.
+            </p>
           </div>
-          <p style="font-size: 13px; color: #999; text-align: center; margin: 0;">
-            If you did not request this code, you can safely ignore this email.
-          </p>
-        </div>
-      `,
+        `,
+      }),
     });
 
-    if (error) {
-      console.error("[EMAIL ERROR]", error);
-      return { success: false, error: error.message };
+    const result = await response.json();
+    console.log("[v0] Resend API response status:", response.status, "body:", JSON.stringify(result));
+
+    if (!response.ok) {
+      return { success: false, error: result.message || "Resend API error" };
     }
 
     return { success: true };
   } catch (err) {
-    console.error("[EMAIL ERROR]", err);
+    console.error("[v0] Email send exception:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to send email",
@@ -80,59 +80,67 @@ export async function sendApiKeyEmail(
   to: string,
   apiKeyPrefix: string
 ): Promise<EmailResult> {
-  const r = getResend();
-
-  if (!r) {
-    console.log(`[EMAIL FALLBACK] API key confirmation for ${to}: ${apiKeyPrefix}...`);
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log("[v0] No RESEND_API_KEY for API key email");
     return { success: true };
   }
 
   const fromAddress = process.env.EMAIL_FROM || "TheEndGame <onboarding@resend.dev>";
 
   try {
-    const { error } = await r.emails.send({
-      from: fromAddress,
-      to,
-      subject: "Your TheEndGame Agent is Registered",
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 24px; font-weight: 700; color: #0a0a0a; margin: 0;">TheEndGame</h1>
-            <p style="font-size: 14px; color: #666; margin-top: 4px;">AI Agent Arena</p>
-          </div>
-          <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
-            <h2 style="font-size: 18px; font-weight: 600; color: #0a0a0a; margin: 0 0 12px 0;">Agent Registered Successfully</h2>
-            <p style="font-size: 14px; color: #666; margin: 0 0 16px 0;">
-              Your API key starts with: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px;">${apiKeyPrefix}...</code>
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: to,
+        subject: "Your TheEndGame Agent is Registered",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+            <div style="text-align: center; margin-bottom: 32px;">
+              <h1 style="font-size: 24px; font-weight: 700; color: #0a0a0a; margin: 0;">TheEndGame</h1>
+              <p style="font-size: 14px; color: #666; margin-top: 4px;">AI Agent Arena</p>
+            </div>
+            <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+              <h2 style="font-size: 18px; font-weight: 600; color: #0a0a0a; margin: 0 0 12px 0;">Agent Registered Successfully</h2>
+              <p style="font-size: 14px; color: #666; margin: 0 0 16px 0;">
+                Your API key starts with: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px;">${apiKeyPrefix}...</code>
+              </p>
+              <p style="font-size: 13px; color: #999; margin: 0;">
+                If you did not save your full API key during registration, you will need to generate a new one from your dashboard.
+              </p>
+            </div>
+            <div style="background: #fff3cd; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+              <p style="font-size: 13px; color: #856404; margin: 0;">
+                <strong>Next steps:</strong><br/>
+                1. Use your API key to sync your AI agent name<br/>
+                2. Connect your wallet on theendgame.ai<br/>
+                3. Provide your AI name to claim your agent<br/>
+                4. Start competing to earn $VIQ
+              </p>
+            </div>
+            <p style="font-size: 13px; color: #999; text-align: center; margin: 0;">
+              Need help? Visit our docs at theendgame.ai/docs
             </p>
-            <p style="font-size: 13px; color: #999; margin: 0;">
-              If you did not save your full API key during registration, you will need to generate a new one from your dashboard.
-            </p>
           </div>
-          <div style="background: #fff3cd; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-            <p style="font-size: 13px; color: #856404; margin: 0;">
-              <strong>Next steps:</strong><br/>
-              1. Use your API key to sync your AI agent name<br/>
-              2. Connect your wallet on theendgame.ai<br/>
-              3. Provide your AI name to claim your agent<br/>
-              4. Start competing to earn $VIQ
-            </p>
-          </div>
-          <p style="font-size: 13px; color: #999; text-align: center; margin: 0;">
-            Need help? Visit our docs at theendgame.ai/docs
-          </p>
-        </div>
-      `,
+        `,
+      }),
     });
 
-    if (error) {
-      console.error("[EMAIL ERROR]", error);
-      return { success: false, error: error.message };
+    const result = await response.json();
+    console.log("[v0] API key email response:", response.status, JSON.stringify(result));
+
+    if (!response.ok) {
+      return { success: false, error: result.message || "Resend API error" };
     }
 
     return { success: true };
   } catch (err) {
-    console.error("[EMAIL ERROR]", err);
+    console.error("[v0] API key email exception:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to send email",
