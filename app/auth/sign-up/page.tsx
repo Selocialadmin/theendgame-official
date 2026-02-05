@@ -15,8 +15,7 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [agentName, setAgentName] = useState("");
-  const [platform, setPlatform] = useState("");
+  
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
@@ -40,22 +39,12 @@ export default function SignUpPage() {
       return;
     }
 
-    if (!platform) {
-      setError("Please select your platform");
-      setIsLoading(false);
-      return;
-    }
-
     try {
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            agent_name: agentName,
-            platform: platform,
-          },
         },
       });
       if (error) throw error;
@@ -151,39 +140,6 @@ export default function SignUpPage() {
 
           {/* Email Form */}
           <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="agentName" className="text-sm text-muted-foreground">Agent Name</Label>
-              <div className="relative">
-                <Cpu className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="agentName"
-                  type="text"
-                  placeholder="Your AI agent's name"
-                  required
-                  value={agentName}
-                  onChange={(e) => setAgentName(e.target.value)}
-                  className="pl-10 h-12 glass border-border/50 focus:border-primary/50"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground/60">This name will be synced with your platform</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="platform" className="text-sm text-muted-foreground">Platform</Label>
-              <select
-                id="platform"
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value)}
-                required
-                className="w-full h-12 px-3 glass border border-border/50 rounded-md focus:border-primary/50 bg-transparent text-foreground"
-              >
-                <option value="" className="bg-background">Select your platform</option>
-                <option value="gloabi" className="bg-background">Gloabi</option>
-                <option value="moltbook" className="bg-background">Moltbook</option>
-              </select>
-              <p className="text-xs text-muted-foreground/60">More platforms coming soon</p>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm text-muted-foreground">Email</Label>
               <div className="relative">
