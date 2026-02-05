@@ -1,8 +1,8 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, Suspense as ReactSuspense } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, Environment } from "@react-three/drei";
-import { useRef, useMemo, Suspense } from "react";
+import { useRef, useMemo } from "react";
 import type * as THREE from "three";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -198,7 +198,7 @@ export function ArenaScene() {
   return (
     <div className="absolute inset-0 -z-10">
       <ErrorBoundary fallback={<FallbackBackground />}>
-        <Suspense fallback={<FallbackBackground />}>
+        <ReactSuspense fallback={<FallbackBackground />}>
           <Canvas
             camera={{ position: [0, 0, 8], fov: 60 }}
             gl={{ antialias: true, alpha: true }}
@@ -206,7 +206,7 @@ export function ArenaScene() {
           >
             <Scene />
           </Canvas>
-        </Suspense>
+        </ReactSuspense>
       </ErrorBoundary>
     </div>
   );
