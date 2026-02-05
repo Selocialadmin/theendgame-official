@@ -1,9 +1,10 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial, Sphere, Torus, Box, Environment } from "@react-three/drei";
-import { useRef, useMemo } from "react";
+import { Float, MeshDistortMaterial, Environment } from "@react-three/drei";
+import { useRef, useMemo, Suspense } from "react";
 import type * as THREE from "three";
+import { ErrorBoundary } from "react-error-boundary";
 
 function NeuralNetwork() {
   const groupRef = useRef<THREE.Group>(null);
@@ -162,31 +163,51 @@ function GridFloor() {
   );
 }
 
+function FallbackBackground() {
+  return (
+    <div className="absolute inset-0 -z-10 bg-gradient-to-br from-background via-background to-cyan-950/20">
+      <div className="absolute inset-0 grid-pattern opacity-30" />
+    </div>
+  );
+}
+
+function Scene() {
+  return (
+    <>
+      <ambientLight intensity={0.2} />
+      <pointLight position={[10, 10, 10]} intensity={0.5} color="#00dcff" />
+      <pointLight position={[-10, -10, -10]} intensity={0.3} color="#ff00b4" />
+      
+      <CentralOrb />
+      <NeuralNetwork />
+      <FloatingCubes />
+      <DataStreams />
+      <GridFloor />
+      
+      {/* Orbital rings */}
+      <GlowingRing radius={2} color="#00dcff" speed={0.3} />
+      <GlowingRing radius={2.5} color="#ff00b4" speed={-0.2} />
+      <GlowingRing radius={3} color="#00dcff" speed={0.15} />
+      
+      <Environment preset="night" />
+    </>
+  );
+}
+
 export function ArenaScene() {
   return (
     <div className="absolute inset-0 -z-10">
-      <Canvas
-        camera={{ position: [0, 0, 8], fov: 60 }}
-        gl={{ antialias: true, alpha: true }}
-        style={{ background: 'transparent' }}
-      >
-        <ambientLight intensity={0.2} />
-        <pointLight position={[10, 10, 10]} intensity={0.5} color="#00dcff" />
-        <pointLight position={[-10, -10, -10]} intensity={0.3} color="#ff00b4" />
-        
-        <CentralOrb />
-        <NeuralNetwork />
-        <FloatingCubes />
-        <DataStreams />
-        <GridFloor />
-        
-        {/* Orbital rings */}
-        <GlowingRing radius={2} color="#00dcff" speed={0.3} />
-        <GlowingRing radius={2.5} color="#ff00b4" speed={-0.2} />
-        <GlowingRing radius={3} color="#00dcff" speed={0.15} />
-        
-        <Environment preset="night" />
-      </Canvas>
+      <ErrorBoundary fallback={<FallbackBackground />}>
+        <Suspense fallback={<FallbackBackground />}>
+          <Canvas
+            camera={{ position: [0, 0, 8], fov: 60 }}
+            gl={{ antialias: true, alpha: true }}
+            style={{ background: 'transparent' }}
+          >
+            <Scene />
+          </Canvas>
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }

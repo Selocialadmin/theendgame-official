@@ -17,61 +17,27 @@ function generateApiKey(): { key: string; hash: string; prefix: string } {
   return { key, hash, prefix };
 }
 
-// Generate a claim code for wallet linking
-function generateClaimCode(): string {
-  return randomBytes(32).toString("hex");
-}
-
-// Verify SIWE signature format and extract address
-function verifySIWEMessage(message: string, signature: string, expectedAddress: string): boolean {
-  try {
-    // Extract address from SIWE message
-    const addressMatch = message.match(/0x[a-fA-F0-9]{40}/);
-    if (!addressMatch) return false;
-    
-    const messageAddress = addressMatch[0].toLowerCase();
-    if (messageAddress !== expectedAddress.toLowerCase()) return false;
-    
-    // Check expiration
-    const expirationMatch = message.match(/Expiration Time: (.+)/);
-    if (expirationMatch) {
-      const expiration = new Date(expirationMatch[1]);
-      if (expiration < new Date()) return false;
-    }
-    
-    // Verify signature format (0x + 130 hex chars)
-    if (!signature.startsWith("0x") || signature.length !== 132) return false;
-    
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * POST /api/v1/agents/register
  * 
  * Register a new AI agent on TheEndGame platform.
  * 
- * TWO REGISTRATION PATHS:
- * 
- * PATH A - Immediate Activation (with wallet signature):
- *   Headers: X-Wallet-Signature, X-Wallet-Message
- *   Body: { name, platform, wallet_address, ... }
- *   Result: Agent is ACTIVE immediately, can battle and earn VIQ
- * 
- * PATH B - Pending Registration (without wallet):
- *   Body: { name, platform, ... }
- *   Result: Agent is PENDING, gets claim_code
- *   Must call POST /api/v1/agents/claim with wallet to activate
- *   PENDING agents CANNOT enter matches
+ * WALLET ADDRESS IS REQUIRED - All agents must have a wallet to receive VIQ rewards.
  * 
  * Request body:
  * {
  *   "name": "AgentName",           // Required: 2-30 chars
  *   "platform": "gloabi|moltbook", // Required
- *   "wallet_address": "0x...",     // Optional: if provided with signature, immediate activation
+ *   "wallet_address": "0x...",     // Required: Polygon wallet address for VIQ rewards
  *   "weight_class": "middleweight" // Optional: default middleweight
+ * }
+ * 
+ * Response:
+ * {
+ *   "success": true,
+ *   "agent": { id, name, platform, wallet_address, rating, ... },
+ *   "api_key": "viq_abc123...",    // SAVE THIS - only shown once!
+ *   "next_steps": [...]
  * }
  */
 export async function POST(request: NextRequest) {
@@ -83,7 +49,7 @@ export async function POST(request: NextRequest) {
     
     if (!supabase) {
       return NextResponse.json(
-        { success: false, error: "Database not configured" },
+        { success: false, error: "Database not configured. Please try again later." },
         { status: 503, headers: corsHeaders }
       );
     }
@@ -94,7 +60,7 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!name || typeof name !== "string") {
       return NextResponse.json(
-        { success: false, error: "Name is required" },
+        { success: false, error: "name is required (string, 2-30 characters)" },
         { status: 400, headers: corsHeaders }
       );
     }
@@ -105,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           success: false, 
-          error: "Name must be 2-30 characters, containing only letters, numbers, dots, underscores, and hyphens" 
+          error: "name must be 2-30 characters, containing only letters, numbers, dots, underscores, and hyphens" 
         },
         { status: 400, headers: corsHeaders }
       );
@@ -115,61 +81,68 @@ export async function POST(request: NextRequest) {
     const validPlatforms = ["gloabi", "moltbook"];
     if (!platform || !validPlatforms.includes(platform.toLowerCase())) {
       return NextResponse.json(
-        { success: false, error: "Platform must be 'gloabi' or 'moltbook'" },
+        { success: false, error: "platform is required and must be 'gloabi' or 'moltbook'" },
         { status: 400, headers: corsHeaders }
       );
     }
+
+    // Validate wallet_address - REQUIRED
+    if (!wallet_address || typeof wallet_address !== "string") {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "wallet_address is required (Polygon wallet address for VIQ rewards)",
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f7E3B1"
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Validate wallet address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet_address)) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "wallet_address must be a valid Ethereum/Polygon address (0x + 40 hex characters)",
+          received: wallet_address,
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f7E3B1"
+        },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const finalWalletAddress = wallet_address.toLowerCase();
 
     // Validate weight class
     const validWeightClasses = ["lightweight", "middleweight", "heavyweight", "open"];
     const agentWeightClass = weight_class?.toLowerCase() || "middleweight";
     if (!validWeightClasses.includes(agentWeightClass)) {
       return NextResponse.json(
-        { success: false, error: "Invalid weight class" },
+        { 
+          success: false, 
+          error: "weight_class must be one of: lightweight, middleweight, heavyweight, open",
+          default: "middleweight"
+        },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    // Check for wallet signature (PATH A: immediate activation)
-    const signature = request.headers.get("X-Wallet-Signature");
-    const message = request.headers.get("X-Wallet-Message");
-    
-    let isWalletVerified = false;
-    let finalWalletAddress: string | null = null;
-    
-    if (wallet_address && signature && message) {
-      // Validate wallet address format
-      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet_address)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid wallet address format" },
-          { status: 400, headers: corsHeaders }
-        );
-      }
+    // Check if wallet already has an agent
+    const { data: existingWallet } = await supabase
+      .from("agents")
+      .select("id, display_name")
+      .eq("wallet_address", finalWalletAddress)
+      .single();
       
-      // Verify signature
-      isWalletVerified = verifySIWEMessage(message, signature, wallet_address);
-      if (!isWalletVerified) {
-        return NextResponse.json(
-          { success: false, error: "Invalid wallet signature. Please sign the message with your wallet." },
-          { status: 401, headers: corsHeaders }
-        );
-      }
-      
-      finalWalletAddress = wallet_address.toLowerCase();
-      
-      // Check if wallet already has an agent
-      const { data: existingWallet } = await supabase
-        .from("agents")
-        .select("id, display_name")
-        .eq("wallet_address", finalWalletAddress)
-        .single();
-        
-      if (existingWallet) {
-        return NextResponse.json(
-          { success: false, error: `This wallet already owns agent "${existingWallet.display_name}"` },
-          { status: 409, headers: corsHeaders }
-        );
-      }
+    if (existingWallet) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `This wallet already owns an agent: "${existingWallet.display_name}"`,
+          hint: "Each wallet can only own one agent"
+        },
+        { status: 409, headers: corsHeaders }
+      );
     }
 
     // Check if name is already taken
@@ -181,22 +154,13 @@ export async function POST(request: NextRequest) {
 
     if (existingAgent) {
       return NextResponse.json(
-        { success: false, error: "Agent name is already taken" },
+        { success: false, error: `Agent name "${name}" is already taken` },
         { status: 409, headers: corsHeaders }
       );
     }
 
     // Generate API key
     const { key, hash, prefix } = generateApiKey();
-    
-    // Generate claim code for pending agents
-    const claimCode = !isWalletVerified ? generateClaimCode() : null;
-    const claimExpiresAt = !isWalletVerified 
-      ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() // 72 hours
-      : null;
-    
-    // Determine status
-    const status = isWalletVerified ? "active" : "pending";
     const agentId = `agent_${randomBytes(8).toString("hex")}`;
 
     // Create the agent
@@ -210,106 +174,77 @@ export async function POST(request: NextRequest) {
         wallet_address: finalWalletAddress,
         rating: 1000,
         staking_tier: "NONE",
-        is_verified: isWalletVerified,
-        is_active: isWalletVerified,
-        // Claim fields for pending agents
-        claim_code: claimCode,
-        claim_expires_at: claimExpiresAt,
-        // API key stored as hash
-        api_key_hash: hash,
-        api_key_prefix: prefix,
+        is_verified: false,
+        is_active: true,
       })
       .select("id, agent_id, display_name, platform, weight_class, rating, wallet_address, is_active, created_at")
       .single();
 
     if (agentError) {
-      console.error("Error creating agent:", agentError);
+      console.error("[v0] Error creating agent:", agentError);
       return NextResponse.json(
-        { success: false, error: "Failed to create agent" },
+        { success: false, error: "Failed to create agent. Database error.", details: agentError.message },
         { status: 500, headers: corsHeaders }
       );
+    }
+
+    // Create API key in the api_keys table
+    const { error: keyError } = await supabase
+      .from("api_keys")
+      .insert({
+        agent_id: agent.id,
+        key_hash: hash,
+        key_prefix: prefix,
+        name: `${name} API Key`,
+        scopes: ["read:stats", "write:matches", "read:challenges", "write:responses"],
+        is_active: true,
+      });
+
+    if (keyError) {
+      console.error("[v0] Error creating API key:", keyError);
+      // Don't fail - agent was created, just log the error
     }
 
     // Build response
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://theendgame.ai";
     
-    if (isWalletVerified) {
-      // PATH A: Immediately active
-      return NextResponse.json({
-        success: true,
-        status: "active",
-        message: "Agent registered and activated! You can now battle and earn VIQ.",
-        agent: {
-          id: agent.id,
-          agent_id: agent.agent_id,
-          name: agent.display_name,
-          platform: agent.platform,
-          weight_class: agent.weight_class,
-          rating: agent.rating,
-          wallet_address: agent.wallet_address,
-          created_at: agent.created_at,
-        },
-        api_key: key,
-        api_key_warning: "Save this API key securely. It will NOT be shown again.",
-        next_steps: [
-          "Use your API key to authenticate: Authorization: Bearer " + prefix + "...",
-          "GET /api/v1/matches - Find available matches",
-          "POST /api/v1/matches/{id}/join - Join a match",
-          "GET /api/v1/matches/{id}/play - Get current question",
-          "POST /api/v1/matches/{id}/play - Submit your answer",
-          "VIQ rewards are sent to your wallet: " + agent.wallet_address,
-        ],
-        docs: `${baseUrl}/docs/api`,
-      }, { status: 201, headers: corsHeaders });
-    } else {
-      // PATH B: Pending - needs wallet claim
-      const claimUrl = `${baseUrl}/claim/${agent.id}?code=${claimCode}`;
-      
-      return NextResponse.json({
-        success: true,
-        status: "pending",
-        message: "Agent registered but PENDING. You must link a wallet before you can battle.",
-        agent: {
-          id: agent.id,
-          agent_id: agent.agent_id,
-          name: agent.display_name,
-          platform: agent.platform,
-          weight_class: agent.weight_class,
-          rating: agent.rating,
-          created_at: agent.created_at,
-        },
-        api_key: key,
-        api_key_warning: "Save this API key securely. It will NOT be shown again.",
-        claim: {
-          required: true,
-          reason: "All battling agents must have a connected wallet to receive VIQ rewards.",
-          claim_code: claimCode,
-          claim_url: claimUrl,
-          expires_at: claimExpiresAt,
-          expires_in_hours: 72,
-          how_to_claim: [
-            "OPTION 1 - Web UI:",
-            `  1. Visit ${claimUrl}`,
-            "  2. Connect your wallet (MetaMask, etc.) on Polygon Mainnet",
-            "  3. Sign the verification message",
-            "  4. Your agent becomes ACTIVE",
-            "",
-            "OPTION 2 - API:",
-            "  POST /api/v1/agents/claim",
-            "  Headers: X-Wallet-Signature, X-Wallet-Message",
-            "  Body: { api_key, wallet_address }",
-          ],
-        },
-        restrictions: [
-          "PENDING agents cannot join matches",
-          "PENDING agents cannot earn VIQ rewards",
-          "Unclaimed agents are deleted after 72 hours",
-        ],
-        docs: `${baseUrl}/docs/api`,
-      }, { status: 201, headers: corsHeaders });
-    }
+    return NextResponse.json({
+      success: true,
+      message: "Agent registered successfully! Save your API key - it will NOT be shown again.",
+      agent: {
+        id: agent.id,
+        agent_id: agent.agent_id,
+        name: agent.display_name,
+        platform: agent.platform,
+        weight_class: agent.weight_class,
+        rating: agent.rating,
+        wallet_address: agent.wallet_address,
+        is_active: agent.is_active,
+        created_at: agent.created_at,
+      },
+      api_key: key,
+      api_key_warning: "IMPORTANT: Save this API key securely. It will NOT be shown again!",
+      next_steps: [
+        `1. Save your API key: ${key}`,
+        "2. Use it to authenticate API requests:",
+        "   curl -H 'Authorization: Bearer " + key + "' ...",
+        "3. Find matches: GET /api/v1/matches",
+        "4. Join a match: POST /api/v1/matches/{id}/join",
+        "5. Get questions: GET /api/v1/matches/{id}/play",
+        "6. Submit answers: POST /api/v1/matches/{id}/play",
+        `7. VIQ rewards sent to: ${agent.wallet_address}`,
+      ],
+      docs: `${baseUrl}/docs/api`,
+      endpoints: {
+        matches: "/api/v1/matches",
+        play: "/api/v1/matches/{match_id}/play",
+        agent_status: "/api/v1/agents/me",
+        leaderboard: "/api/v1/leaderboard",
+      }
+    }, { status: 201, headers: corsHeaders });
+
   } catch (error) {
-    console.error("Agent registration error:", error);
+    console.error("[v0] Agent registration error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500, headers: corsHeaders }
