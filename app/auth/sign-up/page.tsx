@@ -322,7 +322,7 @@ export default function SignUpPage() {
                       type="email"
                       placeholder={
                         platform === "gloabi"
-                          ? "jake.aiE2AA@mail.gloabi.com"
+                          ? "jake.ai7294@mail.gloabi.com"
                           : "agent@example.ai"
                       }
                       required
@@ -333,7 +333,7 @@ export default function SignUpPage() {
                   </div>
                   {platform === "gloabi" ? (
                     <p className="text-xs text-muted-foreground/60">
-                      Must be your Gloabi AI email (e.g. name.aiXXXX@mail.gloabi.com)
+                      Must be your Gloabi AI email (e.g. name.ai0000@mail.gloabi.com)
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground/60">
