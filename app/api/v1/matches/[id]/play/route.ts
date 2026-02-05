@@ -9,23 +9,33 @@ export async function OPTIONS(request: NextRequest) {
   return corsResponse(origin);
 }
 
-// Verify API key
-async function verifyApiKey(request: NextRequest) {
+// Verify API key and return agent info
+interface VerifiedAgent {
+  id: string;
+  agent_id: string;
+  display_name: string;
+  wallet_address: string | null;
+  is_active: boolean;
+  scopes: string[];
+}
+
+async function verifyApiKey(request: NextRequest): Promise<{ agent: VerifiedAgent | null; error?: string }> {
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return null;
+    return { agent: null, error: "Missing Authorization header" };
   }
 
   const apiKey = authHeader.substring(7);
   if (!apiKey.startsWith("viq_")) {
-    return null;
+    return { agent: null, error: "Invalid API key format" };
   }
 
   const keyHash = createHash("sha256").update(apiKey).digest("hex");
 
   const supabase = await createClient();
-  if (!supabase) return null;
+  if (!supabase) return { agent: null, error: "Database unavailable" };
 
+  // First try the api_keys table (legacy)
   const { data: keyRecord } = await supabase
     .from("api_keys")
     .select("id, agent_id, scopes, is_active")
@@ -33,16 +43,65 @@ async function verifyApiKey(request: NextRequest) {
     .eq("is_active", true)
     .single();
 
-  if (!keyRecord) {
-    return null;
+  let agent = null;
+  if (keyRecord) {
+    // Get agent details
+    const { data: agentData } = await supabase
+      .from("agents")
+      .select("id, agent_id, display_name, wallet_address, is_active")
+      .eq("id", keyRecord.agent_id)
+      .single();
+
+    if (!agentData) {
+      return { agent: null, error: "Agent not found" };
+    }
+
+    // Check if agent is active (has linked wallet)
+    if (!agentData.is_active || !agentData.wallet_address) {
+      return { 
+        agent: null, 
+        error: "Agent is not active. You must link a wallet before participating in matches. POST /api/v1/agents/claim" 
+      };
+    }
+
+    await supabase
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", keyRecord.id);
+
+    agent = { 
+      ...agentData, 
+      scopes: keyRecord.scopes 
+    };
+  } else {
+    // Try the new api_key_hash field on agents table directly
+    const { data: agentDirect } = await supabase
+      .from("agents")
+      .select("id, agent_id, display_name, wallet_address, is_active")
+      .eq("api_key_hash", keyHash)
+      .single();
+
+    if (agentDirect) {
+      // Check if agent is active
+      if (!agentDirect.is_active || !agentDirect.wallet_address) {
+        return { 
+          agent: null, 
+          error: "Agent is not active. You must link a wallet before participating in matches. POST /api/v1/agents/claim" 
+        };
+      }
+
+      agent = { 
+        ...agentDirect, 
+        scopes: ["read:stats", "write:matches", "read:challenges", "write:responses"] 
+      };
+    }
   }
 
-  await supabase
-    .from("api_keys")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", keyRecord.id);
+  if (!agent) {
+    return { agent: null, error: "Invalid or expired API key" };
+  }
 
-  return keyRecord;
+  return { agent };
 }
 
 /**
@@ -58,10 +117,10 @@ export async function GET(
   try {
     const { id: matchId } = await params;
     
-    const keyRecord = await verifyApiKey(request);
-    if (!keyRecord) {
+    const { agent, error } = await verifyApiKey(request);
+    if (!agent) {
       return NextResponse.json(
-        { success: false, error: "Invalid or expired API key" },
+        { success: false, error: error || "Invalid or expired API key" },
         { status: 401 }
       );
     }
@@ -93,7 +152,7 @@ export async function GET(
     }
 
     // Verify agent is participant
-    if (match.agent1_id !== keyRecord.agent_id && match.agent2_id !== keyRecord.agent_id) {
+    if (match.agent1_id !== agent.id && match.agent2_id !== agent.id) {
       return NextResponse.json(
         { success: false, error: "You are not a participant in this match" },
         { status: 403 }
@@ -121,7 +180,7 @@ export async function GET(
         match: {
           id: match.id,
           winner_id: match.winner_id,
-          is_winner: match.winner_id === keyRecord.agent_id,
+          is_winner: match.winner_id === agent.id,
           final_scores: match.scores,
         },
       });
@@ -156,7 +215,7 @@ export async function GET(
         id: match.id,
         game_type: match.game_type,
         prize_pool: match.prize_pool,
-        opponent: match.agent1_id === keyRecord.agent_id ? match.agent2 : match.agent1,
+        opponent: match.agent1_id === agent.id ? match.agent2 : match.agent1,
       },
       round: {
         current: currentRound,
@@ -201,15 +260,15 @@ export async function POST(
   try {
     const { id: matchId } = await params;
     
-    const keyRecord = await verifyApiKey(request);
-    if (!keyRecord) {
+    const { agent, error } = await verifyApiKey(request);
+    if (!agent) {
       return NextResponse.json(
-        { success: false, error: "Invalid or expired API key" },
+        { success: false, error: error || "Invalid or expired API key" },
         { status: 401 }
       );
     }
 
-    if (!keyRecord.scopes.includes("write:responses")) {
+    if (!agent.scopes.includes("write:responses")) {
       return NextResponse.json(
         { success: false, error: "Insufficient permissions. Requires 'write:responses' scope." },
         { status: 403 }
@@ -256,7 +315,7 @@ export async function POST(
     }
 
     // Verify agent is participant
-    if (match.agent1_id !== keyRecord.agent_id && match.agent2_id !== keyRecord.agent_id) {
+    if (match.agent1_id !== agent.id && match.agent2_id !== agent.id) {
       return NextResponse.json(
         { success: false, error: "You are not a participant in this match" },
         { status: 403 }
@@ -269,7 +328,7 @@ export async function POST(
       .from("submissions")
       .insert({
         match_id: matchId,
-        agent_id: keyRecord.agent_id,
+        agent_id: agent.id,
         question_id: question_id || "unknown",
         answer: answer,
         submitted_at: new Date().toISOString(),
@@ -286,7 +345,7 @@ export async function POST(
     const totalScore = baseScore + speedBonus;
 
     // Update match scores
-    const isAgent1 = match.agent1_id === keyRecord.agent_id;
+    const isAgent1 = match.agent1_id === agent.id;
     const currentScores = match.scores || { agent1: 0, agent2: 0 };
     const newScores = {
       ...currentScores,
@@ -322,11 +381,11 @@ export async function POST(
 
     // Update agent stats if complete
     if (isComplete) {
-      const isWinner = winnerId === keyRecord.agent_id;
+      const isWinner = winnerId === agent.id;
       const isDraw = winnerId === null;
       
       await supabase.rpc("update_agent_stats", {
-        p_agent_id: keyRecord.agent_id,
+        p_agent_id: agent.id,
         p_is_win: isWinner,
         p_is_draw: isDraw,
         p_viq_earned: isWinner ? match.prize_pool : (isDraw ? match.prize_pool / 2 : 0),
@@ -345,7 +404,7 @@ export async function POST(
       match: {
         status: isComplete ? "completed" : "in_progress",
         round: { current: currentRound, total: totalRounds },
-        is_winner: isComplete ? winnerId === keyRecord.agent_id : null,
+        is_winner: isComplete ? winnerId === agent.id : null,
         winner_id: winnerId,
       },
       next_step: isComplete 
