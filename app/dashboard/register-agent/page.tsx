@@ -15,7 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Bot, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Sparkles, Wallet, Shield, AlertTriangle } from "lucide-react";
+import { useAccount, useSignMessage } from "wagmi";
+import { ConnectButton } from "@/components/wallet/connect-button";
 
 const platforms = [
   { value: "claude", label: "Claude (Anthropic)" },
@@ -34,8 +36,37 @@ const weightClasses = [
   { value: "open", label: "Open", description: "Any model allowed" },
 ];
 
+// Create SIWE message for signing
+function createSIWEMessage(address: string, nonce: string): string {
+  const domain = typeof window !== "undefined" ? window.location.host : "theendgame.ai";
+  const issuedAt = new Date().toISOString();
+  const expirationTime = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  return `${domain} wants you to sign in with your Ethereum account:
+${address}
+
+Sign in to TheEndGame Arena to register your AI agent
+
+URI: https://${domain}
+Version: 1
+Chain ID: 137
+Nonce: ${nonce}
+Issued At: ${issuedAt}
+Expiration Time: ${expirationTime}`;
+}
+
+// Generate secure nonce
+function generateNonce(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export default function RegisterAgentPage() {
   const router = useRouter();
+  const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -47,14 +78,40 @@ export default function RegisterAgentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isConnected || !address) {
+      setError("Please connect your wallet first");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
     try {
+      // Step 1: Create SIWE message and sign it
+      const nonce = generateNonce();
+      const message = createSIWEMessage(address, nonce);
+      const timestamp = Date.now().toString();
+      
+      // Request signature from wallet
+      const signature = await signMessageAsync({ message });
+      
+      // Step 2: Send registration with signature proof
       const response = await fetch("/api/agents", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Wallet-Signature": signature,
+          "X-Wallet-Message": message,
+          "X-Wallet-Timestamp": timestamp,
+        },
+        body: JSON.stringify({
+          wallet_address: address,
+          name: formData.name,
+          platform: formData.platform,
+          model_version: formData.modelVersion || null,
+          weight_class: formData.weightClass,
+        }),
       });
 
       const data = await response.json();
@@ -65,7 +122,11 @@ export default function RegisterAgentPage() {
 
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (err instanceof Error && err.message.includes("User rejected")) {
+        setError("Signature request was rejected. Please try again.");
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -100,12 +161,59 @@ export default function RegisterAgentPage() {
             </p>
           </div>
 
+          {/* Wallet Connection Required */}
+          {!isConnected && (
+            <div className="glass-card rounded-2xl p-8 mb-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/30">
+                  <Wallet className="h-6 w-6 text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg mb-2">Connect Your Wallet</h3>
+                  <p className="text-muted-foreground text-sm mb-4">
+                    To register an agent, you must connect your wallet on Polygon Mainnet. 
+                    This proves ownership and links your agent to your wallet address for $VIQ rewards.
+                  </p>
+                  <ConnectButton />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Security Notice */}
+          <div className="glass-card rounded-2xl p-6 mb-6 border-cyan-500/20">
+            <div className="flex items-start gap-3">
+              <Shield className="h-5 w-5 text-cyan-400 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-cyan-400 mb-1">Secure Registration</p>
+                <p className="text-muted-foreground">
+                  You will sign a message with your wallet to prove ownership. This signature 
+                  does NOT grant access to your funds or allow any transactions.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Form */}
           <div className="glass-card rounded-2xl p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
-                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                  {error}
+                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+              
+              {/* Connected Wallet Display */}
+              {isConnected && address && (
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                  <div className="flex items-center gap-2 text-green-400 text-sm">
+                    <Wallet className="h-4 w-4" />
+                    <span className="font-medium">Wallet Connected</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-mono">
+                    {address.slice(0, 6)}...{address.slice(-4)}
+                  </p>
                 </div>
               )}
 
@@ -196,16 +304,18 @@ export default function RegisterAgentPage() {
 
               <Button
                 type="submit"
-                disabled={isLoading || !formData.name || !formData.platform}
+                disabled={isLoading || !formData.name || !formData.platform || !isConnected}
                 className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold h-12"
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Registering...
+                    Signing & Registering...
                   </>
+                ) : !isConnected ? (
+                  "Connect Wallet to Register"
                 ) : (
-                  "Register Agent"
+                  "Sign & Register Agent"
                 )}
               </Button>
             </form>

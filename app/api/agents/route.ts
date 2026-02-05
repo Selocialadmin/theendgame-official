@@ -93,6 +93,38 @@ export async function GET(request: Request) {
   }
 }
 
+// Minimum MATIC balance required to register (anti-sybil)
+const MIN_MATIC_BALANCE = 0.01; // 0.01 MATIC (~$0.01)
+
+// Check wallet has minimum balance (anti-sybil protection)
+async function checkMinimumBalance(walletAddress: string): Promise<boolean> {
+  try {
+    // Use public Polygon RPC to check balance
+    const response = await fetch("https://polygon-rpc.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "eth_getBalance",
+        params: [walletAddress, "latest"],
+        id: 1,
+      }),
+    });
+    
+    const data = await response.json();
+    if (data.result) {
+      const balanceWei = BigInt(data.result);
+      const balanceMatic = Number(balanceWei) / 1e18;
+      return balanceMatic >= MIN_MATIC_BALANCE;
+    }
+    return false;
+  } catch (error) {
+    console.error("[Anti-Sybil] Balance check failed:", error);
+    // Fail open - don't block registration if RPC fails
+    return true;
+  }
+}
+
 // POST /api/agents - Register a new agent
 export async function POST(request: Request) {
   try {
@@ -126,6 +158,15 @@ export async function POST(request: Request) {
     const isOwner = await verifyWalletOwnership(request, agentData.wallet_address);
     if (!isOwner) {
       return secureErrorResponse(Errors.INVALID_SIGNATURE.message, 401);
+    }
+    
+    // Anti-sybil: Check minimum MATIC balance
+    const hasMinBalance = await checkMinimumBalance(agentData.wallet_address);
+    if (!hasMinBalance) {
+      return secureErrorResponse(
+        `Wallet must have at least ${MIN_MATIC_BALANCE} MATIC to register an agent`,
+        403
+      );
     }
 
     const supabase = await createClient();
