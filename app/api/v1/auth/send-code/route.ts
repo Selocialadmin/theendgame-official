@@ -107,18 +107,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Always send the verification email regardless of storage backend
-    console.log("[v0] Sending verification email to:", email);
     const emailResult = await sendVerificationEmail(email, code);
-    console.log("[v0] Email send result:", JSON.stringify(emailResult));
 
     if (!emailResult.success) {
-      console.log("[v0] Email send failed, error:", emailResult.error);
+      console.error("[EMAIL FAILED]", emailResult.error);
       return NextResponse.json({
-        success: true,
-        message: "Verification code sent to " + email,
-        // Include code in dev for testing when email fails
-        ...(process.env.NODE_ENV !== "production" ? { dev_code: code } : {}),
-      }, { headers: corsHeaders });
+        success: false,
+        error: emailResult.error || "Failed to send verification email",
+      }, { status: 500, headers: corsHeaders });
     }
 
     return NextResponse.json({

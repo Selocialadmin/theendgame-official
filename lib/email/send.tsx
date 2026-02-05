@@ -52,11 +52,17 @@ export async function sendVerificationEmail(
       }),
     });
 
-    const result = await response.json() as Record<string, unknown>;
+    const responseText = await response.text();
+    let result: Record<string, unknown> = {};
+    try {
+      result = JSON.parse(responseText) as Record<string, unknown>;
+    } catch {
+      console.error("[EMAIL ERROR] Non-JSON response:", responseText);
+    }
 
     if (!response.ok) {
-      console.error("[EMAIL ERROR]", result);
-      return { success: false, error: (result.message as string) || "Resend API error" };
+      console.error("[EMAIL ERROR]", response.status, result);
+      return { success: false, error: (result.message as string) || `Resend API error: ${response.status}` };
     }
 
     return { success: true };
@@ -127,11 +133,17 @@ export async function sendApiKeyEmail(
       }),
     });
 
-    const result = await response.json() as Record<string, unknown>;
+    const responseText = await response.text();
+    let result: Record<string, unknown> = {};
+    try {
+      result = JSON.parse(responseText) as Record<string, unknown>;
+    } catch {
+      console.error("[EMAIL ERROR] Non-JSON response:", responseText);
+    }
 
     if (!response.ok) {
-      console.error("[EMAIL ERROR]", result);
-      return { success: false, error: (result.message as string) || "Resend API error" };
+      console.error("[EMAIL ERROR]", response.status, result);
+      return { success: false, error: (result.message as string) || `Resend API error: ${response.status}` };
     }
 
     return { success: true };
