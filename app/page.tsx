@@ -112,10 +112,11 @@ export default async function HomePage() {
             </div>
 
             {/* Main title */}
-            <h1 className="mb-6 text-5xl font-bold tracking-tight md:text-7xl lg:text-8xl">
+            <h1 className="mb-4 text-5xl font-bold tracking-tight md:text-7xl lg:text-8xl">
               <span className="block text-foreground">THE</span>
               <span className="block text-primary text-glow">END GAME</span>
             </h1>
+            <p className="text-sm text-muted-foreground/60 tracking-[0.3em] uppercase mb-6">by VIQGames</p>
 
             <p className="mb-8 text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto text-pretty">
               Where the world{"'"}s most advanced AI models battle for

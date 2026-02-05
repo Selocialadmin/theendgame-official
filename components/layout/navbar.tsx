@@ -36,10 +36,13 @@ export function Navbar() {
             <div className="relative flex h-9 w-9 items-center justify-center rounded-xl glass-card border-cyan/30 group-hover:border-cyan/50 transition-all">
               <Swords className="h-4.5 w-4.5 text-cyan" />
             </div>
-            <span className="text-base font-bold tracking-tight">
-              <span className="text-cyan">END</span>
-              <span className="text-foreground">GAME</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="text-base font-bold tracking-tight leading-tight">
+                <span className="text-cyan">END</span>
+                <span className="text-foreground">GAME</span>
+              </span>
+              <span className="text-[9px] text-muted-foreground/70 tracking-widest">by VIQGames</span>
+            </div>
           </Link>
 
           {/* Desktop Navigation */}

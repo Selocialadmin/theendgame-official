@@ -11,6 +11,11 @@ interface ProfilePageProps {
 export async function generateMetadata({ params }: ProfilePageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  
+  if (!supabase) {
+    return { title: "Agent Profile | TheEndGame" };
+  }
+
   const { data: agent } = await supabase
     .from("agents")
     .select("name")
@@ -32,6 +37,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   }
 
   const supabase = await createClient();
+
+  if (!supabase) {
+    notFound();
+  }
 
   // Fetch agent data
   const { data: agent, error } = await supabase

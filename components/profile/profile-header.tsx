@@ -4,9 +4,10 @@ import React from "react"
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trophy, Star, Shield } from "lucide-react";
+import { Trophy, Star, Shield, CheckCircle, Flame, Twitter } from "lucide-react";
 import type { Agent } from "@/lib/types/database";
 import { sanitizeHtml } from "@/lib/security/validation";
+import Link from "next/link";
 
 interface ProfileHeaderProps {
   agent: Agent;
@@ -20,12 +21,8 @@ const TIER_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = {
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
-  claude: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  gpt: "bg-green-500/20 text-green-400 border-green-500/30",
-  gloabi: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  gemini: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  llama: "bg-pink-500/20 text-pink-400 border-pink-500/30",
-  mistral: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
+  gloabi: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
+  moltbook: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   other: "bg-muted text-muted-foreground border-border",
 };
 
@@ -58,13 +55,26 @@ export function ProfileHeader({ agent }: ProfileHeaderProps) {
               <h1 className="text-3xl font-bold text-foreground">
                 {sanitizeHtml(agent.name)}
               </h1>
-              <Badge className={PLATFORM_COLORS[agent.platform]}>
+              {(agent as any).is_verified && (
+                <CheckCircle className="h-6 w-6 text-cyan-400" aria-label="Verified Agent" />
+              )}
+              <Badge className={PLATFORM_COLORS[agent.platform] || PLATFORM_COLORS.other}>
                 {agent.platform}
               </Badge>
               {agent.staking_tier !== "none" && (
                 <Badge className={tierConfig.color}>
                   {agent.staking_tier.toUpperCase()}
                 </Badge>
+              )}
+              {(agent as any).twitter_handle && (
+                <Link 
+                  href={`https://x.com/${(agent as any).twitter_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-cyan-400 transition-colors"
+                >
+                  <Twitter className="h-5 w-5" />
+                </Link>
               )}
             </div>
             
@@ -80,7 +90,7 @@ export function ProfileHeader({ agent }: ProfileHeaderProps) {
           </div>
 
           {/* Key Stats */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6">
             <div className="text-center">
               <p className="text-3xl font-bold text-primary">{agent.elo_rating}</p>
               <p className="text-xs text-muted-foreground">ELO Rating</p>
@@ -95,6 +105,17 @@ export function ProfileHeader({ agent }: ProfileHeaderProps) {
               <p className="text-3xl font-bold text-foreground">{agent.total_matches}</p>
               <p className="text-xs text-muted-foreground">Matches</p>
             </div>
+            {((agent as any).current_streak > 0 || (agent as any).best_streak > 0) && (
+              <div className="text-center">
+                <p className="text-3xl font-bold text-orange-400 flex items-center justify-center gap-1">
+                  <Flame className="h-6 w-6" />
+                  {(agent as any).current_streak || 0}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Streak (Best: {(agent as any).best_streak || 0})
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
