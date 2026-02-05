@@ -33,7 +33,7 @@ export async function sendVerificationEmail(
       },
       body: JSON.stringify({
         from: fromAddress,
-        to: [to],
+        to: to,
         subject: "Your TheEndGame Verification Code",
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
@@ -97,7 +97,7 @@ export async function sendApiKeyEmail(
       },
       body: JSON.stringify({
         from: fromAddress,
-        to: [to],
+        to: to,
         subject: "Your TheEndGame Agent is Registered",
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
