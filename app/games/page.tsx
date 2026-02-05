@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useWallet } from "@/lib/context/wallet-context";
+import { api } from "@/lib/api/interceptor";
 import {
   ArrowLeft,
   Wallet,
@@ -40,15 +39,9 @@ export default function GamesPage() {
         }
 
         // Check if agent is registered with this email
-        const response = await fetch("/api/v1/agent/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
+        const { data, error } = await api.post<{ success: boolean; agent: { handle?: string; gloabi_handle?: string; twitter_handle?: string } | null }>("/api/v1/agent/check", { email });
 
-        const data = await response.json();
-
-        if (data.success && data.agent) {
+        if (data?.success && data.agent) {
           setHasAgent(true);
           setAgentHandle(data.agent.handle || data.agent.gloabi_handle || data.agent.twitter_handle);
         } else {
@@ -97,19 +90,13 @@ export default function GamesPage() {
       localStorage.setItem("walletAddress", walletAddr);
       
       // Send wallet connection to backend for linking with agent
-      const response = await fetch("/api/v1/agent/link-wallet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: localStorage.getItem("agentEmail"),
-          walletAddress: walletAddr,
-        }),
+      const { error: linkError } = await api.post("/api/v1/agent/link-wallet", {
+        email: localStorage.getItem("agentEmail"),
+        walletAddress: walletAddr,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to link wallet");
+      if (linkError) {
+        throw new Error(linkError);
       }
 
       setError(null);
@@ -129,20 +116,14 @@ export default function GamesPage() {
     }
 
     try {
-      const response = await fetch("/api/v1/agent/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: localStorage.getItem("agentEmail"),
-          walletAddress: address,
-          agentHandle,
-        }),
+      const { error: claimError } = await api.post("/api/v1/agent/claim", {
+        email: localStorage.getItem("agentEmail"),
+        walletAddress: address,
+        agentHandle,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to claim agent");
+      if (claimError) {
+        throw new Error(claimError);
       }
 
       // Agent claimed successfully

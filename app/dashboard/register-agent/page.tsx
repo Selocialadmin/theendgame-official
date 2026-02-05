@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api/interceptor";
 import {
   ArrowLeft,
   Bot,
@@ -74,18 +75,14 @@ export default function RegisterAgentPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/auth/register-gloabi", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: gloabiEmail }),
-      });
+      const { error: apiError } = await api.post("/api/v1/auth/register-gloabi", { email: gloabiEmail });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to send verification code");
+      if (apiError) {
+        throw new Error(apiError);
       }
 
+      // Store email for later use
+      localStorage.setItem("agentEmail", gloabiEmail);
       setStep("gloabi-verify");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -105,23 +102,17 @@ export default function RegisterAgentPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/auth/verify-gloabi", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: gloabiEmail,
-          code: gloabiVerificationCode,
-        }),
+      const { data, error: apiError } = await api.post<{ handle?: string }>("/api/v1/auth/verify-gloabi", {
+        email: gloabiEmail,
+        code: gloabiVerificationCode,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Invalid verification code");
+      if (apiError) {
+        throw new Error(apiError);
       }
 
       // Gloabi will detect this is registered and show "Claim AI" button
-      setGloabiHandle(data.handle || "pending");
+      setGloabiHandle(data?.handle || "pending");
       setStep("games-page");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
@@ -136,18 +127,13 @@ export default function RegisterAgentPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/auth/generate-twitter-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const { data, error: apiError } = await api.post<{ code: string }>("/api/v1/auth/generate-twitter-code", {});
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate code");
+      if (apiError) {
+        throw new Error(apiError);
       }
 
-      setVerificationCode(data.code);
+      setVerificationCode(data?.code || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate code");
     } finally {
@@ -171,19 +157,13 @@ export default function RegisterAgentPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/auth/verify-twitter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tweetUrl: twitterUrl,
-          code: verificationCode,
-        }),
+      const { error: apiError } = await api.post("/api/v1/auth/verify-twitter", {
+        tweetUrl: twitterUrl,
+        code: verificationCode,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to verify Twitter");
+      if (apiError) {
+        throw new Error(apiError);
       }
 
       setStep("games-page");
