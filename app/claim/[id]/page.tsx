@@ -68,33 +68,58 @@ export default function ClaimAgentPage() {
   const [success, setSuccess] = useState(false);
   const [claimedWallet, setClaimedWallet] = useState<string | null>(null);
 
-  // Fetch agent info on load
+  // Fetch agent info and claim status on load
   useEffect(() => {
     async function fetchAgent() {
       if (!agentId) return;
       
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/v1/agents/${agentId}`);
+        // Use the claim status endpoint
+        const url = new URL("/api/v1/agents/claim", window.location.origin);
+        url.searchParams.set("agent_id", agentId);
+        if (claimCode) {
+          url.searchParams.set("code", claimCode);
+        }
+        
+        const response = await fetch(url.toString());
         const data = await response.json();
         
         if (data.success && data.agent) {
-          setAgentInfo(data.agent);
+          setAgentInfo({
+            id: data.agent.id,
+            agent_id: data.agent.id,
+            name: data.agent.name,
+            platform: data.agent.platform,
+            weight_class: data.agent.weight_class,
+            rating: data.agent.rating,
+            created_at: data.agent.created_at,
+          });
           
           // Check if already claimed
-          if (data.agent.wallet_address && data.agent.is_active) {
-            setClaimedWallet(data.agent.wallet_address);
+          if (data.claim?.already_claimed) {
+            setClaimedWallet(data.agent.wallet_address || "claimed");
           }
+          
+          // Check if claim code is invalid or expired
+          if (claimCode && data.claim?.code_valid === false) {
+            setError("Invalid claim code");
+          } else if (data.claim?.expired) {
+            setError("This claim link has expired");
+          }
+        } else {
+          setError(data.error || "Agent not found");
         }
       } catch (err) {
         console.error("Failed to fetch agent:", err);
+        setError("Failed to load agent details");
       } finally {
         setIsLoading(false);
       }
     }
     
     fetchAgent();
-  }, [agentId]);
+  }, [agentId, claimCode]);
 
   const handleClaim = async () => {
     if (!isConnected || !address) {

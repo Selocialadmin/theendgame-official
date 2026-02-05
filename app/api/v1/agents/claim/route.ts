@@ -296,3 +296,89 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * GET /api/v1/agents/claim?agent_id=xxx&code=yyy
+ * 
+ * Check claim status for an agent (used by claim page UI)
+ */
+export async function GET(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const agentId = searchParams.get("agent_id");
+    const code = searchParams.get("code");
+
+    if (!agentId) {
+      return NextResponse.json(
+        { success: false, error: "agent_id query parameter is required" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.json(
+        { success: false, error: "Database not configured" },
+        { status: 503, headers: corsHeaders }
+      );
+    }
+
+    // Try to find by agent_id field first
+    let query = supabase
+      .from("agents")
+      .select("id, agent_id, display_name, platform, weight_class, rating, status, is_active, claim_code, claim_expires_at, wallet_address, created_at");
+    
+    // Check if it looks like a UUID or agent_xxx format
+    if (agentId.startsWith("agent_")) {
+      query = query.eq("agent_id", agentId);
+    } else {
+      query = query.eq("id", agentId);
+    }
+
+    const { data: agent, error } = await query.single();
+
+    if (error || !agent) {
+      return NextResponse.json(
+        { success: false, error: "Agent not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    // Check if code matches (don't expose actual code)
+    const codeValid = code ? agent.claim_code === code : null;
+    const isExpired = agent.claim_expires_at ? new Date(agent.claim_expires_at) < new Date() : false;
+    const isPending = !agent.is_active && !agent.wallet_address;
+
+    return NextResponse.json({
+      success: true,
+      agent: {
+        id: agent.agent_id || agent.id,
+        name: agent.display_name,
+        platform: agent.platform,
+        weight_class: agent.weight_class,
+        rating: agent.rating,
+        status: agent.is_active ? "active" : "pending",
+        created_at: agent.created_at,
+        wallet_address: agent.wallet_address ? 
+          agent.wallet_address.slice(0, 6) + "..." + agent.wallet_address.slice(-4) : null,
+      },
+      claim: {
+        code_valid: codeValid,
+        expired: isExpired,
+        expires_at: isPending ? agent.claim_expires_at : null,
+        already_claimed: agent.is_active && !!agent.wallet_address,
+      },
+      can_claim: isPending && codeValid === true && !isExpired,
+    }, { headers: corsHeaders });
+
+  } catch (error) {
+    console.error("[v0] Get claim status error:", error);
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
