@@ -32,6 +32,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Database not configured" },
+        { status: 503 }
+      );
+    }
+
     // Try to check if email is already registered
     try {
       const { data: existingRegistration } = await supabase

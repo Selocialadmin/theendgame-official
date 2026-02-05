@@ -12,6 +12,13 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Database not configured" },
+        { status: 503 }
+      );
+    }
+
     // Generate a unique 8-character code
     const code = crypto.randomBytes(4).toString("hex").toUpperCase().slice(0, 8);
 

@@ -18,6 +18,16 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      // Still return success for preview without DB
+      return NextResponse.json({
+        success: true,
+        message: "Agent claimed (preview mode)",
+        walletAddress: walletAddress.toLowerCase(),
+        agentHandle,
+      });
+    }
+
     try {
       // Update registration status to "claimed"
       const { error: updateError } = await supabase

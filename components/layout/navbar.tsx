@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ConnectButton } from "@/components/wallet/connect-button";
-import { WalletDisplay } from "@/components/wallet/wallet-display"; // Import WalletDisplay component
 import {
   Swords,
   Trophy,

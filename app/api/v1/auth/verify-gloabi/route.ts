@@ -22,6 +22,17 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      // Still allow verification for preview without DB
+      const gloabiHandle = `agent_${email.split("@")[0]}`;
+      return NextResponse.json({
+        success: true,
+        message: "Email verified (preview mode)",
+        handle: gloabiHandle,
+        nextStep: "Go to Games page to claim your agent",
+      });
+    }
+
     // Try to verify the code
     try {
       const { data: verificationData, error: verifyError } = await supabase

@@ -25,7 +25,6 @@ export default function GamesPage() {
   const [isLoadingAgent, setIsLoadingAgent] = useState(true);
   const [isConnectingWallet, setIsConnectingWallet] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
   // Check if user has a registered agent
   useEffect(() => {

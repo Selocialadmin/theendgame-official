@@ -18,6 +18,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      return NextResponse.json({
+        success: false,
+        agent: null,
+        error: "Database not configured",
+      });
+    }
+
     try {
       const { data: registration } = await supabase
         .from("agent_registrations")

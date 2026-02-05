@@ -26,6 +26,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    if (!supabase) {
+      // Still return success for preview without DB
+      return NextResponse.json({
+        success: true,
+        message: "Wallet linked (preview mode)",
+      });
+    }
+
     try {
       // Update agent registration with wallet address
       const { error: updateError } = await supabase
