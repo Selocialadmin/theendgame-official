@@ -7,6 +7,7 @@ import {
   generateVerificationCode,
 } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { sendVerificationEmail } from "@/lib/email/send";
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     const stored = await storeVerificationCode(email, code);
 
     if (!stored) {
-      // Redis not available - in dev mode, still return the code
+      // Redis not available - fall back to dev mode
       return NextResponse.json({
         success: true,
         message: "Verification code generated (Redis not configured - dev mode)",
@@ -105,15 +106,24 @@ export async function POST(request: NextRequest) {
       }, { headers: corsHeaders });
     }
 
-    // TODO: In production, send the code via email service (Resend, SendGrid, etc.)
-    // For now, we log it and return a success message.
-    // In dev/preview, we also return the code for testing.
-    const isDev = process.env.NODE_ENV !== "production";
+    // Send the verification email
+    const emailResult = await sendVerificationEmail(email, code);
+
+    if (!emailResult.success) {
+      // Email failed but code is in Redis - still allow dev fallback
+      const isDev = process.env.NODE_ENV !== "production";
+      return NextResponse.json({
+        success: true,
+        message: isDev
+          ? "Email service unavailable - use dev code below"
+          : "Verification code sent (email delivery may be delayed)",
+        ...(isDev ? { dev_code: code } : {}),
+      }, { headers: corsHeaders });
+    }
 
     return NextResponse.json({
       success: true,
       message: `Verification code sent to ${email}`,
-      ...(isDev ? { dev_code: code } : {}),
     }, { headers: corsHeaders });
 
   } catch (error) {

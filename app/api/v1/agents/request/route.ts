@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
 import { getCorsHeaders, corsResponse } from "@/lib/security/cors";
+import { generateApiKey } from "@/lib/security/api-keys";
 
 // Handle CORS preflight requests
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin");
   return corsResponse(origin);
-}
-
-// Generate a secure API key with viq_ prefix
-function generateApiKey(): { key: string; hash: string; prefix: string } {
-  const key = `viq_${randomBytes(32).toString("hex")}`;
-  const hash = createHash("sha256").update(key).digest("hex");
-  const prefix = key.substring(0, 12);
-  return { key, hash, prefix };
 }
 
 // Generate a claim code (URL-safe)

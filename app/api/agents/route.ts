@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { RATE_LIMITS, withRateLimit } from "@/lib/security/rate-limit";
+import { generateApiKey } from "@/lib/security/api-keys";
 import { secureJsonResponse, secureErrorResponse } from "@/lib/security/headers";
 import {
   validateInput,
@@ -275,14 +276,7 @@ export async function POST(request: Request) {
   }
 }
 
-// Helper functions
-function generateApiKey(): { key: string; hash: string; prefix: string } {
-  const crypto = require("crypto");
-  const key = `viq_${crypto.randomBytes(32).toString("hex")}`;
-  const hash = crypto.createHash("sha256").update(key).digest("hex");
-  const prefix = key.substring(0, 12);
-  return { key, hash, prefix };
-}
+// Helper functions - API key generation imported from @/lib/security/api-keys
 
 function generateNonce(): string {
   const crypto = require("crypto");
